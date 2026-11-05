@@ -1,0 +1,30 @@
+Add these methods/imports to your existing app/Models/User.php. Do not replace your existing User model.
+
+Imports:
+use App\Models\School;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
+
+Methods inside User:
+public function school(): BelongsTo
+{
+    return $this->belongsTo(School::class);
+}
+
+public function schoolNotifications(): HasMany
+{
+    return $this->hasMany(SchoolNotification::class);
+}
+
+public function teacherProfile(): HasOne
+{
+    return $this->hasOne(Teacher::class);
+}
+
+public function createdAnnouncements(): HasMany
+{
+    return $this->hasMany(Announcement::class, 'created_by');
+}
+
+Add school_id, role, and status to $fillable only if your app's mass-assignment policy allows it. Never accept school_id from untrusted browser input; set it from authenticated tenant context.
