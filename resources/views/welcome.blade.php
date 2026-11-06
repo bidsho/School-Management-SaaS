@@ -1181,11 +1181,11 @@
                             Log In
                         </a>
 
-                        @if (Route::has('register'))
+                        {{-- @if (Route::has('register'))
                             <a href="{{ route('register') }}" class="btn-primary-custom">
                                 Get Started <i class="bi bi-arrow-right"></i>
                             </a>
-                        @endif
+                        @endif --}}
                     @endauth
                 @endif
 
@@ -1225,10 +1225,10 @@
                 <div class="hero-actions">
 
                     @if (Route::has('register'))
-                        <a href="{{ route('register') }}" class="btn-primary-custom">
+                        {{-- <a href="{{ route('register') }}" class="btn-primary-custom">
                             Get Started Today
                             <i class="bi bi-arrow-up-right"></i>
-                        </a>
+                        </a> --}}
                     @elseif (Route::has('login'))
                         <a href="{{ route('login') }}" class="btn-primary-custom">
                             Access Your School
@@ -1918,10 +1918,10 @@
             </p>
 
             @if (Route::has('register'))
-                <a href="{{ route('register') }}" class="btn-white">
+                {{-- <a href="{{ route('register') }}" class="btn-white">
                     Create Your School Account
                     <i class="bi bi-arrow-right"></i>
-                </a>
+                </a> --}}
             @elseif (Route::has('login'))
                 <a href="{{ route('login') }}" class="btn-white">
                     Access Your Account
@@ -1999,7 +1999,7 @@
                     @endif
 
                     @if (Route::has('register'))
-                        <a href="{{ route('register') }}">Register School</a>
+                        {{-- <a href="{{ route('register') }}">Register School</a> --}}
                     @endif
 
                     <a href="#features">School Features</a>
