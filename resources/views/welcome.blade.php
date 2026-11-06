@@ -1225,10 +1225,10 @@
                 <div class="hero-actions">
 
                     @if (Route::has('register'))
-                        {{-- <a href="{{ route('register') }}" class="btn-primary-custom">
+                        <a href="{{ route('login') }}" class="btn-primary-custom">
                             Get Started Today
                             <i class="bi bi-arrow-up-right"></i>
-                        </a> --}}
+                        </a>
                     @elseif (Route::has('login'))
                         <a href="{{ route('login') }}" class="btn-primary-custom">
                             Access Your School
