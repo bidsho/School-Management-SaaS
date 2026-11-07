@@ -2,6 +2,12 @@
 <div>
     
 <div>
+    @if ($errors->has('creation'))
+    <div class="alert alert-danger rounded-3">
+        <i class="bi bi-exclamation-triangle me-2"></i>
+        {{ $errors->first('creation') }}
+    </div>
+@endif
     <form wire:submit="save">
         <div class="card border-0 shadow-sm rounded-4">
 
