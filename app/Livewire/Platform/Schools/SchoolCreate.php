@@ -32,6 +32,7 @@ class SchoolCreate extends Component
 
     public function save(): void
     {
+        dd('error');
         Log::info('School creation form submitted.', [
             'school_name' => $this->name,
             'admin_email' => $this->adminEmail,
