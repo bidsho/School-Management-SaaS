@@ -29,6 +29,10 @@ class SchoolCreate extends Component
     public string $adminEmail = '';
 
     public bool $isSaving = false;
+    public function mount(): void
+{
+    dd('SCHOOL CREATE COMPONENT LOADED');
+}
 
     public function save(): void
     {
