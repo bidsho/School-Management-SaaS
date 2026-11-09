@@ -1,15 +1,31 @@
 
 <!DOCTYPE html>
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
 
-    <title>{{ $title ?? 'Platform Admin' }} | {{ config('app.name', 'EduManage') }}</title>
+    <title>
+        {{ $title ?? 'Platform Admin' }} |
+        {{ config('app.name', 'EduManage') }}
+    </title>
 
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    {{-- Bootstrap 5 --}}
+    <link
+        href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
+        rel="stylesheet"
+    >
+
+    {{-- Bootstrap Icons --}}
+    <link
+        href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css"
+        rel="stylesheet"
+    >
+
+    {{-- Livewire styles --}}
+    @livewireStyles
 
     <style>
         :root {
@@ -24,7 +40,9 @@
             --super-sidebar-width: 265px;
         }
 
-        * { box-sizing: border-box; }
+        * {
+            box-sizing: border-box;
+        }
 
         body {
             margin: 0;
@@ -35,7 +53,13 @@
             font-size: 14px;
         }
 
-        a { text-decoration: none; }
+        a {
+            text-decoration: none;
+        }
+
+        /* =====================================
+           SIDEBAR
+        ===================================== */
 
         .super-sidebar {
             position: fixed;
@@ -60,6 +84,10 @@
             color: white;
         }
 
+        .super-brand:hover {
+            color: white;
+        }
+
         .super-brand-icon {
             display: grid;
             place-items: center;
@@ -68,7 +96,7 @@
             flex-shrink: 0;
             border-radius: 14px;
             background: linear-gradient(135deg, #6366f1, #818cf8);
-            box-shadow: 0 7px 22px rgba(99,102,241,.25);
+            box-shadow: 0 7px 22px rgba(99, 102, 241, .25);
             font-size: 22px;
         }
 
@@ -123,10 +151,10 @@
         }
 
         .super-nav-link.active {
-            border-color: rgba(165,180,252,.1);
+            border-color: rgba(165, 180, 252, .1);
             background: linear-gradient(100deg, #4f46e5, #6366f1);
             color: white;
-            box-shadow: 0 5px 14px rgba(79,70,229,.2);
+            box-shadow: 0 5px 14px rgba(79, 70, 229, .2);
         }
 
         .super-nav-link .nav-arrow {
@@ -134,6 +162,10 @@
             font-size: 11px;
             opacity: .65;
         }
+
+        /* =====================================
+           SIDEBAR PROFILE
+        ===================================== */
 
         .super-sidebar-bottom {
             margin-top: auto;
@@ -176,10 +208,18 @@
             font-size: 11px;
         }
 
+        /* =====================================
+           MAIN CONTENT
+        ===================================== */
+
         .super-main {
             min-height: 100vh;
             margin-left: var(--super-sidebar-width);
         }
+
+        /* =====================================
+           TOPBAR
+        ===================================== */
 
         .super-topbar {
             position: sticky;
@@ -191,7 +231,7 @@
             min-height: 78px;
             padding: 15px 32px;
             border-bottom: 1px solid var(--super-border);
-            background: rgba(255,255,255,.94);
+            background: rgba(255, 255, 255, .94);
             backdrop-filter: blur(12px);
         }
 
@@ -208,7 +248,9 @@
             font-size: 12px;
         }
 
-        .super-breadcrumb span { color: var(--super-primary); }
+        .super-breadcrumb span {
+            color: var(--super-primary);
+        }
 
         .super-topbar-actions {
             display: flex;
@@ -241,7 +283,13 @@
             background: #22c55e;
         }
 
-        .super-content { padding: 30px 32px; }
+        .super-content {
+            padding: 30px 32px;
+        }
+
+        /* =====================================
+           MOBILE MENU
+        ===================================== */
 
         .super-menu-toggle {
             display: none;
@@ -254,6 +302,14 @@
             color: var(--super-text);
             font-size: 20px;
         }
+
+        .super-overlay {
+            display: none;
+        }
+
+        /* =====================================
+           LOGOUT
+        ===================================== */
 
         .super-logout {
             display: flex;
@@ -271,51 +327,77 @@
         }
 
         .super-logout:hover {
-            background: rgba(239,68,68,.1);
+            background: rgba(239, 68, 68, .1);
             color: #fecaca;
         }
 
-        .super-overlay { display: none; }
+        /* =====================================
+           RESPONSIVE
+        ===================================== */
 
         @media (max-width: 991.98px) {
-            .super-sidebar { transform: translateX(-100%); }
+            .super-sidebar {
+                transform: translateX(-100%);
+            }
 
-            .super-sidebar.show { transform: translateX(0); }
+            .super-sidebar.show {
+                transform: translateX(0);
+            }
 
-            .super-main { margin-left: 0; }
+            .super-main {
+                margin-left: 0;
+            }
 
-            .super-menu-toggle { display: inline-grid; }
+            .super-menu-toggle {
+                display: inline-grid;
+            }
 
             .super-overlay.show {
                 position: fixed;
                 inset: 0;
                 z-index: 1030;
                 display: block;
-                background: rgba(15,23,42,.55);
+                background: rgba(15, 23, 42, .55);
             }
 
-            .super-topbar { padding: 14px 20px; }
+            .super-topbar {
+                padding: 14px 20px;
+            }
 
-            .super-content { padding: 23px 20px; }
+            .super-content {
+                padding: 23px 20px;
+            }
         }
 
         @media (max-width: 575.98px) {
-            .super-topbar { padding: 13px; }
+            .super-topbar {
+                padding: 13px;
+            }
 
-            .super-content { padding: 17px 13px; }
+            .super-content {
+                padding: 17px 13px;
+            }
 
-            .super-date { display: none; }
+            .super-date {
+                display: none;
+            }
 
-            .super-page-title { font-size: 16px; }
+            .super-page-title {
+                font-size: 16px;
+            }
 
-            .super-status { padding: 7px 9px; }
+            .super-status {
+                padding: 7px 9px;
+            }
         }
     </style>
 
     @stack('styles')
+
 </head>
 
 <body>
+
 @php
     $user = auth()->user();
 
@@ -359,10 +441,18 @@
     ];
 @endphp
 
+{{-- MOBILE SIDEBAR OVERLAY --}}
 <div class="super-overlay" id="superOverlay"></div>
 
+{{-- =====================================
+     SIDEBAR
+===================================== --}}
+
 <aside class="super-sidebar" id="superSidebar">
-    <a href="/platform/dashboard" class="super-brand">
+
+    {{-- BRAND --}}
+    <a href="{{ url('/platform/dashboard') }}" class="super-brand">
+
         <span class="super-brand-icon">
             <i class="bi bi-mortarboard-fill"></i>
         </span>
@@ -371,37 +461,62 @@
             <span class="super-brand-name d-block">
                 {{ config('app.name', 'EduManage') }}
             </span>
-            <span class="super-brand-caption">Platform control</span>
+
+            <span class="super-brand-caption">
+                Platform control
+            </span>
         </span>
+
     </a>
 
-    <div class="super-section-label">Platform</div>
+    {{-- PLATFORM NAVIGATION --}}
+    <div class="super-section-label">
+        Platform
+    </div>
 
     @foreach ($navigation as $item)
-        <a href="{{ $item['url'] }}"
-           class="super-nav-link {{ $item['active'] ? 'active' : '' }}">
+
+        <a
+            href="{{ url($item['url']) }}"
+            class="super-nav-link {{ $item['active'] ? 'active' : '' }}"
+            @if($item['active']) aria-current="page" @endif
+        >
             <i class="bi {{ $item['icon'] }}"></i>
+
             <span>{{ $item['label'] }}</span>
         </a>
+
     @endforeach
 
-    <div class="super-section-label">System</div>
+    {{-- SYSTEM NAVIGATION --}}
+    <div class="super-section-label">
+        System
+    </div>
 
-    <a href="/platform/activity"
-       class="super-nav-link {{ request()->is('platform/activity*') ? 'active' : '' }}">
+    <a
+        href="{{ url('/platform/activity') }}"
+        class="super-nav-link {{ request()->is('platform/activity*') ? 'active' : '' }}"
+    >
         <i class="bi bi-clock-history"></i>
         <span>Activity Logs</span>
     </a>
 
-    <a href="/platform/settings"
-       class="super-nav-link {{ request()->is('platform/settings*') ? 'active' : '' }}">
+    <a
+        href="{{ url('/platform/settings') }}"
+        class="super-nav-link {{ request()->is('platform/settings*') ? 'active' : '' }}"
+    >
         <i class="bi bi-gear"></i>
         <span>Platform Settings</span>
     </a>
 
+    {{-- SIDEBAR BOTTOM --}}
     <div class="super-sidebar-bottom">
-        <div class="super-section-label">Account</div>
 
+        <div class="super-section-label">
+            Account
+        </div>
+
+        {{-- LOGOUT --}}
         <form method="POST" action="{{ route('logout') }}">
             @csrf
 
@@ -411,46 +526,76 @@
             </button>
         </form>
 
+        {{-- USER PROFILE --}}
         <div class="super-profile">
-            <div class="super-avatar">{{ $initials ?: 'SA' }}</div>
+
+            <div class="super-avatar">
+                {{ $initials ?: 'SA' }}
+            </div>
 
             <div class="flex-grow-1 overflow-hidden">
-                <div class="super-profile-name">{{ $user?->name }}</div>
+
+                <div class="super-profile-name">
+                    {{ $user?->name }}
+                </div>
+
                 <div class="super-profile-role">
                     <i class="bi bi-shield-check me-1"></i>
                     Super Administrator
                 </div>
+
             </div>
 
             <i class="bi bi-three-dots-vertical text-secondary"></i>
+
         </div>
+
     </div>
+
 </aside>
 
+{{-- =====================================
+     MAIN CONTENT
+===================================== --}}
+
 <div class="super-main">
+
+    {{-- TOPBAR --}}
     <header class="super-topbar">
+
         <div class="d-flex align-items-center gap-3">
-            <button type="button"
-                    class="super-menu-toggle"
-                    id="superMenuToggle"
-                    aria-label="Toggle navigation"
-                    aria-expanded="false">
+
+            {{-- MOBILE MENU BUTTON --}}
+            <button
+                type="button"
+                class="super-menu-toggle"
+                id="superMenuToggle"
+                aria-label="Toggle navigation"
+                aria-expanded="false"
+                aria-controls="superSidebar"
+            >
                 <i class="bi bi-list"></i>
             </button>
 
             <div>
+
                 <h1 class="super-page-title">
                     {{ $title ?? 'Platform Dashboard' }}
                 </h1>
 
                 <div class="super-breadcrumb">
-                    Platform <span class="mx-1">/</span>
+                    Platform
+                    <span class="mx-1">/</span>
                     {{ $title ?? 'Overview' }}
                 </div>
+
             </div>
+
         </div>
 
+        {{-- TOPBAR ACTIONS --}}
         <div class="super-topbar-actions">
+
             <span class="super-date">
                 <i class="bi bi-calendar3 me-1"></i>
                 {{ now()->format('D, d M Y') }}
@@ -461,46 +606,138 @@
                 Platform active
             </span>
 
-            <div class="super-avatar">{{ $initials ?: 'SA' }}</div>
+            <div class="super-avatar">
+                {{ $initials ?: 'SA' }}
+            </div>
+
         </div>
+
     </header>
 
+    {{-- PAGE CONTENT --}}
     <main class="super-content">
+
         {{ $slot }}
+
     </main>
+
 </div>
 
-<script>
-    document.addEventListener('DOMContentLoaded', function () {
-        const sidebar = document.getElementById('superSidebar');
-        const toggle = document.getElementById('superMenuToggle');
-        const overlay = document.getElementById('superOverlay');
+{{-- =====================================
+     JAVASCRIPT
+===================================== --}}
 
-        function closeSidebar() {
-            sidebar.classList.remove('show');
-            overlay.classList.remove('show');
-            toggle.setAttribute('aria-expanded', 'false');
+<script>
+    (function () {
+
+        function initializeSuperLayout() {
+
+            const sidebar = document.getElementById('superSidebar');
+            const toggle = document.getElementById('superMenuToggle');
+            const overlay = document.getElementById('superOverlay');
+
+            if (!sidebar || !toggle || !overlay) {
+                return;
+            }
+
+            // Prevent duplicate event listeners.
+            if (toggle.dataset.initialized === 'true') {
+                return;
+            }
+
+            toggle.dataset.initialized = 'true';
+
+            function closeSidebar() {
+
+                sidebar.classList.remove('show');
+                overlay.classList.remove('show');
+
+                toggle.setAttribute('aria-expanded', 'false');
+
+                document.body.style.overflow = '';
+            }
+
+            function openSidebar() {
+
+                sidebar.classList.add('show');
+                overlay.classList.add('show');
+
+                toggle.setAttribute('aria-expanded', 'true');
+
+                document.body.style.overflow = 'hidden';
+            }
+
+            toggle.addEventListener('click', function () {
+
+                const isOpen = sidebar.classList.contains('show');
+
+                if (isOpen) {
+                    closeSidebar();
+                } else {
+                    openSidebar();
+                }
+
+            });
+
+            overlay.addEventListener('click', closeSidebar);
+
+            // Close sidebar when a navigation link is selected.
+            sidebar.querySelectorAll('.super-nav-link').forEach(function (link) {
+
+                link.addEventListener('click', function () {
+
+                    if (window.innerWidth <= 991) {
+                        closeSidebar();
+                    }
+
+                });
+
+            });
+
+            // Close with Escape key.
+            document.addEventListener('keydown', function (event) {
+
+                if (event.key === 'Escape') {
+                    closeSidebar();
+                }
+
+            });
+
+            // Close when screen becomes desktop size.
+            window.addEventListener('resize', function () {
+
+                if (window.innerWidth > 991) {
+                    closeSidebar();
+                }
+
+            });
+
         }
 
-        toggle.addEventListener('click', function () {
-            const open = sidebar.classList.toggle('show');
+        if (document.readyState === 'loading') {
 
-            overlay.classList.toggle('show', open);
-            toggle.setAttribute('aria-expanded', String(open));
-        });
+            document.addEventListener(
+                'DOMContentLoaded',
+                initializeSuperLayout
+            );
 
-        overlay.addEventListener('click', closeSidebar);
+        } else {
 
-        document.addEventListener('keydown', function (event) {
-            if (event.key === 'Escape') closeSidebar();
-        });
+            initializeSuperLayout();
 
-        window.addEventListener('resize', function () {
-            if (window.innerWidth > 991) closeSidebar();
-        });
-    });
+        }
+
+    })();
 </script>
 
+{{-- Additional page scripts --}}
 @stack('scripts')
+
+{{-- Bootstrap JavaScript --}}
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+{{-- Livewire scripts --}}
+@livewireScripts
+
 </body>
 </html>
