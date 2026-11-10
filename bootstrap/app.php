@@ -1,13 +1,14 @@
+
 <?php
 
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Request;
+
 use App\Http\Middleware\ResolveSchoolTenant;
 use App\Http\Middleware\EnsureUserHasRole;
 use App\Http\Middleware\EnsureUserHasPermission;
-
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -15,15 +16,25 @@ return Application::configure(basePath: dirname(__DIR__))
         commands: __DIR__.'/../routes/console.php',
         health: '/up',
     )
-   ->withMiddleware(function (Middleware $middleware): void {
-    $middleware->alias([
-        'school.tenant' => ResolveSchoolTenant::class,
-        'role' => EnsureUserHasRole::class,
-        'permission' => EnsureUserHasPermission::class,
-    ]);
-})
+    ->withMiddleware(function (Middleware $middleware): void {
+
+        // Trust the reverse proxy (Coolify / Traefik).
+        // This allows Laravel to recognise HTTPS forwarded by the proxy.
+        $middleware->trustProxies(at: '*');
+
+        // Existing application middleware aliases.
+        $middleware->alias([
+            'school.tenant' => ResolveSchoolTenant::class,
+            'role' => EnsureUserHasRole::class,
+            'permission' => EnsureUserHasPermission::class,
+        ]);
+
+    })
     ->withExceptions(function (Exceptions $exceptions): void {
+
         $exceptions->shouldRenderJsonWhen(
             fn (Request $request) => $request->is('api/*') || $request->expectsJson(),
         );
-    })->create();
+
+    })
+    ->create();
