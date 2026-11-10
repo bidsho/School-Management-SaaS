@@ -1,4 +1,3 @@
-
 <?php
 
 use Illuminate\Foundation\Application;
@@ -18,11 +17,10 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware): void {
 
-        // Trust the reverse proxy (Coolify / Traefik).
-        // This allows Laravel to recognise HTTPS forwarded by the proxy.
+        // Trust the Coolify / Traefik reverse proxy.
         $middleware->trustProxies(at: '*');
 
-        // Existing application middleware aliases.
+        // Application middleware aliases.
         $middleware->alias([
             'school.tenant' => ResolveSchoolTenant::class,
             'role' => EnsureUserHasRole::class,
