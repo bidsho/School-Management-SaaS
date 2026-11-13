@@ -6,6 +6,9 @@ use Illuminate\Support\Str;
 
 trait UsesPortalLayout
 {
+    /**
+     * Determine the current portal route prefix.
+     */
     protected function portalRoutePrefix(): string
     {
         $path = $this->getPortalRequestPath();
@@ -21,17 +24,24 @@ trait UsesPortalLayout
         abort(403, 'Unauthorized portal access.');
     }
 
+    /**
+     * Return the correct portal layout.
+     */
     protected function portalLayout(): string
     {
-        $prefix = $this->portalRoutePrefix();
-
-        if ($prefix === 'receptionist.') {
-            return 'components.layouts.receptionist';
-        }
-
-        return 'components.layouts.school';
+        return match ($this->portalRoutePrefix()) {
+            'receptionist.' => 'components.layouts.receptionist',
+            'school.' => 'components.layouts.school',
+            default => abort(403, 'Unauthorized portal access.'),
+        };
     }
 
+    /**
+     * Resolve the original portal page path.
+     *
+     * Livewire AJAX requests use the Referer header because
+     * their current route is the Livewire update endpoint.
+     */
     protected function getPortalRequestPath(): string
     {
         // Normal page request.
@@ -52,11 +62,10 @@ trait UsesPortalLayout
             $path = parse_url($referer, PHP_URL_PATH);
 
             if (is_string($path)) {
-                if (Str::startsWith($path, '/school/')) {
-                    return $path;
-                }
-
-                if (Str::startsWith($path, '/receptionist/')) {
+                if (
+                    Str::startsWith($path, '/school/') ||
+                    Str::startsWith($path, '/receptionist/')
+                ) {
                     return $path;
                 }
             }
