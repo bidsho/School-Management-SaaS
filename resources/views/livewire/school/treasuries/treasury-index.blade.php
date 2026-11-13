@@ -1,4 +1,98 @@
+
+
+
 <div class="container-fluid py-4">
+    <style>
+    /* Modal overlay */
+    .treasury-modal-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 1055;
+        display: block;
+        overflow-x: hidden;
+        overflow-y: auto;
+        padding: 16px;
+        background: rgba(15, 23, 42, .65);
+    }
+
+    /* Modal dimensions */
+    .treasury-modal-dialog {
+        width: 100%;
+        max-width: 800px;
+        height: calc(100vh - 32px);
+        height: calc(100dvh - 32px);
+        min-height: 0;
+        margin: 0 auto;
+    }
+
+    /* Modal content */
+    .treasury-modal-content {
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+        max-height: 100%;
+        overflow: hidden;
+        border: 0;
+        border-radius: 12px;
+        background: #fff;
+    }
+
+    /* Keep header visible */
+    .treasury-modal-header {
+        flex-shrink: 0;
+        background: #fff;
+        border-bottom: 1px solid #e9ecef;
+    }
+
+    /* Scrollable form body */
+    .treasury-modal-body {
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow-x: hidden;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+        overscroll-behavior: contain;
+    }
+
+    /* Keep footer visible */
+    .treasury-modal-footer {
+        flex-shrink: 0;
+        background: #fff;
+        border-top: 1px solid #e9ecef;
+    }
+
+    /* Scrollbar */
+    .treasury-modal-body::-webkit-scrollbar,
+    .treasury-modal-overlay::-webkit-scrollbar {
+        width: 7px;
+    }
+
+    .treasury-modal-body::-webkit-scrollbar-thumb,
+    .treasury-modal-overlay::-webkit-scrollbar-thumb {
+        background: #cbd5e1;
+        border-radius: 10px;
+    }
+
+    @media (max-width: 576px) {
+        .treasury-modal-overlay {
+            padding: 8px;
+        }
+
+        .treasury-modal-dialog {
+            height: calc(100vh - 16px);
+            height: calc(100dvh - 16px);
+        }
+
+        .treasury-modal-body {
+            padding: 16px !important;
+        }
+
+        .treasury-modal-header,
+        .treasury-modal-footer {
+            padding: 12px 16px !important;
+        }
+    }
+</style>
 
     {{-- Page heading --}}
     <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
@@ -21,7 +115,9 @@
             <i class="bi bi-check-circle-fill me-2"></i>
             {{ session('success') }}
 
-            <button type="button" class="btn-close" data-bs-dismiss="alert"
+            <button type="button"
+                    class="btn-close"
+                    data-bs-dismiss="alert"
                     aria-label="Close"></button>
         </div>
     @endif
@@ -32,15 +128,19 @@
             <i class="bi bi-exclamation-triangle-fill me-2"></i>
             {{ session('warning') }}
 
-            <button type="button" class="btn-close" data-bs-dismiss="alert"
+            <button type="button"
+                    class="btn-close"
+                    data-bs-dismiss="alert"
                     aria-label="Close"></button>
         </div>
     @endif
 
     {{-- Staff table --}}
     <div class="card border-0 shadow-sm rounded-3">
+
         <div class="card-header bg-white border-0 pt-4 px-4">
             <div class="row g-3 align-items-center">
+
                 <div class="col-md-6">
                     <h5 class="fw-bold mb-1">All Treasury Staff</h5>
                     <p class="text-muted small mb-0">
@@ -63,20 +163,25 @@
                         >
 
                         @if ($search !== '')
-                            <button type="button"
-                                    wire:click="$set('search', '')"
-                                    class="btn btn-outline-secondary">
+                            <button
+                                type="button"
+                                wire:click="$set('search', '')"
+                                class="btn btn-outline-secondary"
+                            >
                                 Clear
                             </button>
                         @endif
                     </div>
                 </div>
+
             </div>
         </div>
 
         <div class="card-body p-0">
             <div class="table-responsive">
+
                 <table class="table table-hover align-middle mb-0">
+
                     <thead class="table-light">
                         <tr>
                             <th class="px-4 py-3">Staff Member</th>
@@ -91,9 +196,13 @@
 
                     <tbody>
                         @forelse ($treasuries as $treasury)
+
                             <tr wire:key="treasury-{{ $treasury->id }}">
+
+                                {{-- Staff member --}}
                                 <td class="px-4">
                                     <div class="d-flex align-items-center gap-3">
+
                                         <div
                                             class="rounded-circle bg-primary-subtle text-primary
                                                    d-flex align-items-center justify-content-center
@@ -107,23 +216,29 @@
                                             <div class="fw-semibold">
                                                 {{ $treasury->user->name }}
                                             </div>
+
                                             <div class="small text-muted">
                                                 {{ $treasury->user->email }}
                                             </div>
                                         </div>
+
                                     </div>
                                 </td>
 
+                                {{-- Employee number --}}
                                 <td>
                                     <span class="fw-semibold">
                                         {{ $treasury->employee_number }}
                                     </span>
                                 </td>
 
+                                {{-- Phone --}}
                                 <td>{{ $treasury->phone ?: '—' }}</td>
 
+                                {{-- Job title --}}
                                 <td>{{ $treasury->job_title }}</td>
 
+                                {{-- Status --}}
                                 <td>
                                     @if ($treasury->status === 'active')
                                         <span class="badge rounded-pill bg-success-subtle text-success px-3 py-2">
@@ -138,12 +253,15 @@
                                     @endif
                                 </td>
 
+                                {{-- Date joined --}}
                                 <td>
                                     {{ $treasury->date_joined?->format('d M Y') ?? '—' }}
                                 </td>
 
+                                {{-- Actions --}}
                                 <td class="text-end px-4">
                                     <div class="d-inline-flex gap-1">
+
                                         <button
                                             type="button"
                                             wire:click="edit({{ $treasury->id }})"
@@ -174,12 +292,17 @@
                                         >
                                             <i class="bi bi-trash"></i>
                                         </button>
+
                                     </div>
                                 </td>
+
                             </tr>
+
                         @empty
+
                             <tr>
                                 <td colspan="7" class="text-center py-5">
+
                                     <div class="mb-3">
                                         <i class="bi bi-people text-muted"
                                            style="font-size: 3rem;"></i>
@@ -192,18 +315,24 @@
                                     </p>
 
                                     @if ($search === '')
-                                        <button type="button"
-                                                wire:click="create"
-                                                class="btn btn-primary btn-sm">
+                                        <button
+                                            type="button"
+                                            wire:click="create"
+                                            class="btn btn-primary btn-sm"
+                                        >
                                             <i class="bi bi-person-plus me-1"></i>
                                             Add Treasury Staff
                                         </button>
                                     @endif
+
                                 </td>
                             </tr>
+
                         @endforelse
                     </tbody>
+
                 </table>
+
             </div>
         </div>
 
@@ -213,23 +342,30 @@
                 {{ $treasuries->links() }}
             </div>
         @endif
+
     </div>
 
     {{-- Create/Edit modal --}}
     @if ($showForm)
+
         <div
-            class="modal d-block"
+            class="treasury-modal-overlay"
             tabindex="-1"
             role="dialog"
             aria-modal="true"
-            style="background: rgba(15, 23, 42, .55);"
             wire:key="treasury-form-modal"
         >
-            <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
-                <div class="modal-content border-0 shadow-lg rounded-3">
 
-                    <form wire:submit="save">
-                        <div class="modal-header px-4 py-3">
+            <div class="treasury-modal-dialog">
+
+                <div class="treasury-modal-content shadow-lg">
+
+                    <form wire:submit="save"
+                          class="d-flex flex-column h-100">
+
+                        {{-- Modal header --}}
+                        <div class="modal-header treasury-modal-header px-4 py-3">
+
                             <div>
                                 <h5 class="modal-title fw-bold">
                                     {{ $editingId ? 'Edit Treasury Staff' : 'Register Treasury Staff' }}
@@ -246,13 +382,17 @@
                                 wire:click="resetForm"
                                 aria-label="Close"
                             ></button>
+
                         </div>
 
-                        <div class="modal-body p-4">
+                        {{-- Scrollable modal body --}}
+                        <div class="modal-body treasury-modal-body p-4">
+
                             <div class="row g-3">
 
                                 {{-- Full name --}}
                                 <div class="col-md-6">
+
                                     <label for="treasury-name" class="form-label fw-semibold">
                                         Full Name <span class="text-danger">*</span>
                                     </label>
@@ -269,10 +409,12 @@
                                     @error('name')
                                         <div class="invalid-feedback">{{ $message }}</div>
                                     @enderror
+
                                 </div>
 
                                 {{-- Email --}}
                                 <div class="col-md-6">
+
                                     <label for="treasury-email" class="form-label fw-semibold">
                                         Email Address <span class="text-danger">*</span>
                                     </label>
@@ -289,10 +431,12 @@
                                     @error('email')
                                         <div class="invalid-feedback">{{ $message }}</div>
                                     @enderror
+
                                 </div>
 
                                 {{-- Employee number --}}
                                 <div class="col-md-6">
+
                                     <label for="treasury-employee-number" class="form-label fw-semibold">
                                         Employee Number <span class="text-danger">*</span>
                                     </label>
@@ -308,10 +452,12 @@
                                     @error('employee_number')
                                         <div class="invalid-feedback">{{ $message }}</div>
                                     @enderror
+
                                 </div>
 
                                 {{-- Phone --}}
                                 <div class="col-md-6">
+
                                     <label for="treasury-phone" class="form-label fw-semibold">
                                         Phone Number
                                     </label>
@@ -328,10 +474,12 @@
                                     @error('phone')
                                         <div class="invalid-feedback">{{ $message }}</div>
                                     @enderror
+
                                 </div>
 
                                 {{-- Job title --}}
                                 <div class="col-md-6">
+
                                     <label for="treasury-job-title" class="form-label fw-semibold">
                                         Job Title <span class="text-danger">*</span>
                                     </label>
@@ -347,10 +495,12 @@
                                     @error('job_title')
                                         <div class="invalid-feedback">{{ $message }}</div>
                                     @enderror
+
                                 </div>
 
                                 {{-- Status --}}
                                 <div class="col-md-6">
+
                                     <label for="treasury-status" class="form-label fw-semibold">
                                         Employment Status <span class="text-danger">*</span>
                                     </label>
@@ -367,10 +517,12 @@
                                     @error('status')
                                         <div class="invalid-feedback">{{ $message }}</div>
                                     @enderror
+
                                 </div>
 
                                 {{-- Date joined --}}
                                 <div class="col-md-6">
+
                                     <label for="treasury-date-joined" class="form-label fw-semibold">
                                         Date Joined
                                     </label>
@@ -385,10 +537,12 @@
                                     @error('date_joined')
                                         <div class="invalid-feedback">{{ $message }}</div>
                                     @enderror
+
                                 </div>
 
                                 {{-- Notes --}}
                                 <div class="col-12">
+
                                     <label for="treasury-notes" class="form-label fw-semibold">
                                         Notes
                                     </label>
@@ -404,8 +558,10 @@
                                     @error('notes')
                                         <div class="invalid-feedback">{{ $message }}</div>
                                     @enderror
+
                                 </div>
 
+                                {{-- Password setup information --}}
                                 @unless ($editingId)
                                     <div class="col-12">
                                         <div class="alert alert-info small mb-0">
@@ -417,9 +573,12 @@
                                 @endunless
 
                             </div>
+
                         </div>
 
-                        <div class="modal-footer px-4 py-3">
+                        {{-- Modal footer --}}
+                        <div class="modal-footer treasury-modal-footer px-4 py-3">
+
                             <button
                                 type="button"
                                 wire:click="resetForm"
@@ -434,23 +593,32 @@
                                 wire:loading.attr="disabled"
                                 wire:target="save"
                             >
+
                                 <span wire:loading.remove wire:target="save">
                                     <i class="bi bi-check2-circle me-1"></i>
                                     {{ $editingId ? 'Update Staff' : 'Register Staff' }}
                                 </span>
 
                                 <span wire:loading wire:target="save">
-                                    <span class="spinner-border spinner-border-sm me-1"
-                                          aria-hidden="true"></span>
+                                    <span
+                                        class="spinner-border spinner-border-sm me-1"
+                                        aria-hidden="true"
+                                    ></span>
                                     Saving...
                                 </span>
+
                             </button>
+
                         </div>
+
                     </form>
 
                 </div>
+
             </div>
+
         </div>
+
     @endif
 
 </div>
