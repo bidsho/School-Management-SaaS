@@ -1,85 +1,76 @@
 <?php
 
-namespace App\Livewire\Concerns;
+namespace App\Models;
 
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Route;
-use Illuminate\Support\Str;
-use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
+use App\Models\Concerns\BelongsToSchool;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
-trait UsesPortalLayout
+class SchoolParent extends Model
 {
-    protected function portalRouteName(): ?string
+    use HasFactory, BelongsToSchool;
+
+    /**
+     * Database table.
+     */
+    protected $table = 'parents';
+
+    /**
+     * Mass assignable attributes.
+     */
+    protected $fillable = [
+        'school_id',
+        'user_id',
+        'first_name',
+        'last_name',
+        'email',
+        'phone',
+        'address',
+        'occupation',
+    ];
+
+    /**
+     * Parent belongs to a school.
+     */
+    public function school(): BelongsTo
     {
-        // Normal page request.
-        $routeName = request()->route()?->getName();
-
-        if ($routeName && (
-            Str::startsWith($routeName, 'school.') ||
-            Str::startsWith($routeName, 'receptionist.')
-        )) {
-            return $routeName;
-        }
-
-        // Livewire AJAX request: recover the original page
-        // from the same-origin Referer header.
-        $referer = request()->headers->get('referer');
-
-        if (!$referer) {
-            return null;
-        }
-
-        $refererParts = parse_url($referer);
-
-        if (
-            !is_array($refererParts) ||
-            empty($refererParts['host']) ||
-            strtolower($refererParts['host']) !==
-                strtolower(request()->getHost())
-        ) {
-            return null;
-        }
-
-        $path = $refererParts['path'] ?? '/';
-
-        try {
-            $refererRequest = Request::create($path, 'GET');
-
-            $matchedRoute = Route::getRoutes()->match($refererRequest);
-
-            return $matchedRoute->getName();
-        } catch (NotFoundHttpException $exception) {
-            return null;
-        }
+        return $this->belongsTo(School::class, 'school_id');
     }
 
-    protected function portalLayout(): string
+    /**
+     * Parent may have a login account.
+     */
+    public function user(): BelongsTo
     {
-        $routeName = $this->portalRouteName();
-
-        if ($routeName && Str::startsWith($routeName, 'receptionist.')) {
-            return 'components.layouts.receptionist';
-        }
-
-        if ($routeName && Str::startsWith($routeName, 'school.')) {
-            return 'components.layouts.school';
-        }
-
-        abort(403, 'Unauthorized portal access.');
+        return $this->belongsTo(User::class, 'user_id');
     }
 
-    protected function portalRoutePrefix(): string
+    /**
+     * Parent can have multiple students.
+     */
+    public function students(): BelongsToMany
     {
-        $routeName = $this->portalRouteName();
+        return $this->belongsToMany(
+            Student::class,
+            'parent_student',
+            'parent_id',
+            'student_id'
+        )
+        ->withPivot([
+            'school_id',
+            'relationship',
+            'is_primary',
+        ])
+        ->withTimestamps();
+    }
 
-        if ($routeName && Str::startsWith($routeName, 'receptionist.')) {
-            return 'receptionist.';
-        }
-
-        if ($routeName && Str::startsWith($routeName, 'school.')) {
-            return 'school.';
-        }
-
-        abort(403, 'Unauthorized portal access.');
+    /**
+     * Get parent's full name.
+     */
+    public function getFullNameAttribute(): string
+    {
+        return trim($this->first_name . ' ' . $this->last_name);
     }
 }
