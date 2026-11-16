@@ -16,6 +16,7 @@ use Livewire\Component;
 class TeacherAssignmentCreate extends Component
 {
     public $teacher_id = '';
+    public $teacherSearch = '';
     public $subject_id = '';
     public $class_room_id = '';
     public $section_id = '';
@@ -42,18 +43,21 @@ class TeacherAssignmentCreate extends Component
                 Rule::exists('teachers', 'id')
                     ->where('school_id', $schoolId),
             ],
+
             'subject_id' => [
                 'required',
                 'integer',
                 Rule::exists('subjects', 'id')
                     ->where('school_id', $schoolId),
             ],
+
             'class_room_id' => [
                 'required',
                 'integer',
                 Rule::exists('class_rooms', 'id')
                     ->where('school_id', $schoolId),
             ],
+
             'section_id' => [
                 'nullable',
                 'integer',
@@ -61,12 +65,14 @@ class TeacherAssignmentCreate extends Component
                     ->where('school_id', $schoolId)
                     ->where('class_room_id', $this->class_room_id),
             ],
+
             'academic_session_id' => [
                 'required',
                 'integer',
                 Rule::exists('academic_sessions', 'id')
                     ->where('school_id', $schoolId),
             ],
+
             'term_id' => [
                 'nullable',
                 'integer',
@@ -77,14 +83,59 @@ class TeacherAssignmentCreate extends Component
         ];
     }
 
+    /**
+     * Clear the selected teacher whenever the search changes.
+     */
+    public function updatedTeacherSearch(): void
+    {
+        $this->teacher_id = '';
+
+        $this->resetValidation('teacher_id');
+    }
+
+    /**
+     * Select a teacher from the search results.
+     */
+    public function selectTeacher(int $teacherId): void
+    {
+        $teacher = Teacher::withoutGlobalScopes()
+            ->where('school_id', $this->schoolId())
+            ->findOrFail($teacherId);
+
+        $this->teacher_id = (string) $teacher->id;
+
+        $this->teacherSearch = trim(
+            ($teacher->first_name ?? '') . ' ' .
+            ($teacher->middle_name ?? '') . ' ' .
+            ($teacher->last_name ?? '')
+        );
+
+        $this->resetValidation('teacher_id');
+    }
+
+    /**
+     * Clear the selected teacher.
+     */
+    public function clearTeacher(): void
+    {
+        $this->teacher_id = '';
+        $this->teacherSearch = '';
+
+        $this->resetValidation('teacher_id');
+    }
+
     public function updatedClassRoomId(): void
     {
         $this->section_id = '';
+
+        $this->resetValidation('section_id');
     }
 
     public function updatedAcademicSessionId(): void
     {
         $this->term_id = '';
+
+        $this->resetValidation('term_id');
     }
 
     public function save(): void
@@ -100,6 +151,7 @@ class TeacherAssignmentCreate extends Component
 
         $schoolId = $this->schoolId();
 
+        // Check whether this exact assignment already exists.
         $duplicate = TeacherAssignment::withoutGlobalScopes()
             ->where('school_id', $schoolId)
             ->where('teacher_id', $validated['teacher_id'])
@@ -111,9 +163,14 @@ class TeacherAssignmentCreate extends Component
             ->exists();
 
         if ($duplicate) {
-            $this->addError(
-                'teacher_id',
-                'This teacher assignment already exists.'
+            $message = 'This teacher has already been assigned to this subject, class and academic period.';
+
+            $this->addError('teacher_id', $message);
+
+            // Display a popup warning.
+            $this->dispatch(
+                'assignment-duplicate',
+                message: $message
             );
 
             return;
@@ -126,7 +183,10 @@ class TeacherAssignmentCreate extends Component
             'term_id' => $validated['term_id'] ?: null,
         ]);
 
-        session()->flash('success', 'Teacher assignment created successfully.');
+        session()->flash(
+            'success',
+            'Teacher assignment created successfully.'
+        );
 
         $this->redirectRoute('school.teacher-assignments.index');
     }
@@ -135,48 +195,79 @@ class TeacherAssignmentCreate extends Component
     {
         $schoolId = $this->schoolId();
 
-        return view('livewire.school.teacher-assignments.teacher-assignment-create', [
-            'teachers' => Teacher::withoutGlobalScopes()
+        // Search teachers belonging only to the current school.
+        $teachers = collect();
+
+        if (!$this->teacher_id && trim($this->teacherSearch) !== '') {
+            $search = trim($this->teacherSearch);
+
+            $teachers = Teacher::withoutGlobalScopes()
                 ->where('school_id', $schoolId)
+                ->where(function ($query) use ($search) {
+                    $query->where('first_name', 'like', "%{$search}%")
+                        ->orWhere('middle_name', 'like', "%{$search}%")
+                        ->orWhere('last_name', 'like', "%{$search}%")
+                        ->orWhere('staff_number', 'like', "%{$search}%");
+                })
                 ->orderBy('first_name')
                 ->orderBy('last_name')
-                ->get(),
+                ->limit(10)
+                ->get();
+        }
 
-            'subjects' => Subject::withoutGlobalScopes()
+        $selectedTeacher = $this->teacher_id
+            ? Teacher::withoutGlobalScopes()
                 ->where('school_id', $schoolId)
-                ->where('status', 'active')
-                ->orderBy('name')
-                ->get(),
+                ->find($this->teacher_id)
+            : null;
 
-            'classes' => ClassRoom::withoutGlobalScopes()
-                ->where('school_id', $schoolId)
-                ->where('status', 'active')
-                ->orderBy('name')
-                ->get(),
+        return view(
+            'livewire.school.teacher-assignments.teacher-assignment-create',
+            [
+                'teachers' => $teachers,
+                'selectedTeacher' => $selectedTeacher,
 
-            'sections' => Section::withoutGlobalScopes()
-                ->where('school_id', $schoolId)
-                ->when($this->class_room_id, fn ($query) =>
-                    $query->where('class_room_id', $this->class_room_id)
-                )
-                ->orderBy('name')
-                ->get(),
+                'subjects' => Subject::withoutGlobalScopes()
+                    ->where('school_id', $schoolId)
+                    ->where('status', 'active')
+                    ->orderBy('name')
+                    ->get(),
 
-            'sessions' => AcademicSession::withoutGlobalScopes()
-                ->where('school_id', $schoolId)
-                ->orderByDesc('starts_at')
-                ->get(),
+                'classes' => ClassRoom::withoutGlobalScopes()
+                    ->where('school_id', $schoolId)
+                    ->where('status', 'active')
+                    ->orderBy('name')
+                    ->get(),
 
-            'terms' => Term::withoutGlobalScopes()
-                ->where('school_id', $schoolId)
-                ->when($this->academic_session_id, fn ($query) =>
-                    $query->where(
-                        'academic_session_id',
-                        $this->academic_session_id
+                'sections' => Section::withoutGlobalScopes()
+                    ->where('school_id', $schoolId)
+                    ->when(
+                        $this->class_room_id,
+                        fn ($query) => $query->where(
+                            'class_room_id',
+                            $this->class_room_id
+                        )
                     )
-                )
-                ->orderBy('starts_at')
-                ->get(),
-        ])->layout('components.layouts.school');
+                    ->orderBy('name')
+                    ->get(),
+
+                'sessions' => AcademicSession::withoutGlobalScopes()
+                    ->where('school_id', $schoolId)
+                    ->orderByDesc('starts_at')
+                    ->get(),
+
+                'terms' => Term::withoutGlobalScopes()
+                    ->where('school_id', $schoolId)
+                    ->when(
+                        $this->academic_session_id,
+                        fn ($query) => $query->where(
+                            'academic_session_id',
+                            $this->academic_session_id
+                        )
+                    )
+                    ->orderBy('starts_at')
+                    ->get(),
+            ]
+        )->layout('components.layouts.school');
     }
 }
