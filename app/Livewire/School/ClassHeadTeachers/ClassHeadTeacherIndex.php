@@ -19,6 +19,7 @@ class ClassHeadTeacherIndex extends Component
     protected string $paginationTheme = 'bootstrap';
 
     public string $search = '';
+    public string $teacherSearch = '';
 
     public bool $showModal = false;
 
@@ -44,6 +45,36 @@ class ClassHeadTeacherIndex extends Component
         $this->resetPage();
     }
 
+    public function updatedTeacherSearch(): void
+    {
+        // A new search means the previous selection is no longer confirmed.
+        $this->teacher_id = '';
+        $this->resetValidation('teacher_id');
+    }
+
+    public function selectTeacher(int $id): void
+    {
+        $teacher = Teacher::withoutGlobalScopes()
+            ->where('school_id', $this->schoolId())
+            ->findOrFail($id);
+
+        $this->teacher_id = (string) $teacher->id;
+
+        $this->teacherSearch = trim(
+            $teacher->first_name . ' ' . $teacher->last_name
+        );
+
+        $this->resetValidation('teacher_id');
+    }
+
+    public function clearTeacher(): void
+    {
+        $this->teacher_id = '';
+        $this->teacherSearch = '';
+
+        $this->resetValidation('teacher_id');
+    }
+
     public function openCreateModal(): void
     {
         $this->resetForm();
@@ -64,8 +95,16 @@ class ClassHeadTeacherIndex extends Component
             ->where('school_id', $this->schoolId())
             ->findOrFail($id);
 
+        $teacher = Teacher::withoutGlobalScopes()
+            ->where('school_id', $this->schoolId())
+            ->findOrFail($assignment->teacher_id);
+
         $this->editingId = $assignment->id;
         $this->teacher_id = (string) $assignment->teacher_id;
+        $this->teacherSearch = trim(
+            $teacher->first_name . ' ' . $teacher->last_name
+        );
+
         $this->class_room_id = (string) $assignment->class_room_id;
         $this->academic_session_id = (string) $assignment->academic_session_id;
         $this->starts_at = $assignment->starts_at?->format('Y-m-d') ?? '';
@@ -73,6 +112,14 @@ class ClassHeadTeacherIndex extends Component
 
         $this->resetValidation();
         $this->showModal = true;
+    }
+
+    private function duplicateWarning(string $message): void
+    {
+        $this->dispatch(
+            'class-head-assignment-duplicate',
+            message: $message
+        );
     }
 
     public function save(): void
@@ -105,38 +152,54 @@ class ClassHeadTeacherIndex extends Component
         $classId = (int) $validated['class_room_id'];
         $sessionId = (int) $validated['academic_session_id'];
 
-        // The database allows one assignment per class and session.
-        // Reuse that record instead of creating a duplicate.
-        $assignment = ClassHeadTeacher::withoutGlobalScopes()
-            ->where('school_id', $schoolId)
-            ->where('class_room_id', $classId)
-            ->where('academic_session_id', $sessionId)
-            ->first();
-
         if ($this->editingId) {
+            // Confirm that the assignment being edited belongs to this school.
             $assignment = ClassHeadTeacher::withoutGlobalScopes()
                 ->where('school_id', $schoolId)
                 ->findOrFail($this->editingId);
 
-            // Do not let an edit collide with another class/session record.
+            // Another record must not already occupy this class/session.
             $duplicate = ClassHeadTeacher::withoutGlobalScopes()
                 ->where('school_id', $schoolId)
                 ->where('class_room_id', $classId)
                 ->where('academic_session_id', $sessionId)
-                ->whereKeyNot($assignment->id)
+                ->where('id', '!=', $assignment->id)
                 ->exists();
 
             if ($duplicate) {
-                $this->addError(
-                    'class_room_id',
-                    'This class already has an assignment for that academic session. Edit the existing assignment instead.'
-                );
+                $message = 'This class already has a Class Head Teacher assignment for the selected academic session. Please edit the existing assignment instead.';
+
+                $this->addError('class_room_id', $message);
+                $this->duplicateWarning($message);
 
                 return;
             }
-        }
+        } else {
+            // Do not silently overwrite an existing assignment.
+            $existing = ClassHeadTeacher::withoutGlobalScopes()
+                ->where('school_id', $schoolId)
+                ->where('class_room_id', $classId)
+                ->where('academic_session_id', $sessionId)
+                ->with('teacher')
+                ->first();
 
-        $assignment ??= new ClassHeadTeacher();
+            if ($existing) {
+                $existingTeacher = $existing->teacher;
+
+                $teacherName = $existingTeacher
+                    ? trim($existingTeacher->first_name . ' ' . $existingTeacher->last_name)
+                    : 'Another teacher';
+
+                $message = "This class already has an assignment for the selected academic session. Current Class Head Teacher: {$teacherName}. Please edit the existing assignment.";
+
+                $this->addError('class_room_id', $message);
+                $this->duplicateWarning($message);
+
+                return;
+            }
+
+            $assignment = new ClassHeadTeacher();
+        }
 
         $assignment->fill([
             'school_id' => $schoolId,
@@ -174,16 +237,18 @@ class ClassHeadTeacherIndex extends Component
 
     public function reactivate(int $id): void
     {
+        $schoolId = $this->schoolId();
+
         $assignment = ClassHeadTeacher::withoutGlobalScopes()
-            ->where('school_id', $this->schoolId())
+            ->where('school_id', $schoolId)
             ->findOrFail($id);
 
         $duplicate = ClassHeadTeacher::withoutGlobalScopes()
-            ->where('school_id', $this->schoolId())
+            ->where('school_id', $schoolId)
             ->where('class_room_id', $assignment->class_room_id)
             ->where('academic_session_id', $assignment->academic_session_id)
             ->where('status', 'active')
-            ->whereKeyNot($assignment->id)
+            ->where('id', '!=', $assignment->id)
             ->exists();
 
         if ($duplicate) {
@@ -227,6 +292,7 @@ class ClassHeadTeacherIndex extends Component
         $this->reset([
             'editingId',
             'teacher_id',
+            'teacherSearch',
             'class_room_id',
             'academic_session_id',
             'starts_at',
@@ -240,16 +306,41 @@ class ClassHeadTeacherIndex extends Component
     {
         $schoolId = $this->schoolId();
 
+        $teachers = collect();
+
+        if ($this->showModal && $this->teacher_id === '') {
+            $search = trim($this->teacherSearch);
+
+            $teachers = Teacher::withoutGlobalScopes()
+                ->where('school_id', $schoolId)
+                ->when($search !== '', function (Builder $query) use ($search) {
+                    $query->where(function (Builder $q) use ($search) {
+                        $q->where('first_name', 'like', "%{$search}%")
+                            ->orWhere('last_name', 'like', "%{$search}%")
+                            ->orWhere('staff_number', 'like', "%{$search}%");
+                    });
+                })
+                ->orderBy('first_name')
+                ->orderBy('last_name')
+                ->limit(10)
+                ->get();
+        }
+
+        $selectedTeacher = null;
+
+        if ($this->showModal && $this->teacher_id !== '') {
+            $selectedTeacher = Teacher::withoutGlobalScopes()
+                ->where('school_id', $schoolId)
+                ->find($this->teacher_id);
+        }
+
         return view('livewire.school.class-head-teachers.class-head-teacher-index', [
             'assignments' => $this->assignmentsQuery()
                 ->orderByDesc('id')
                 ->paginate(10),
 
-            'teachers' => Teacher::withoutGlobalScopes()
-                ->where('school_id', $schoolId)
-                ->orderBy('first_name')
-                ->orderBy('last_name')
-                ->get(),
+            'teachers' => $teachers,
+            'selectedTeacher' => $selectedTeacher,
 
             'classes' => ClassRoom::withoutGlobalScopes()
                 ->where('school_id', $schoolId)
@@ -277,4 +368,3 @@ class ClassHeadTeacherIndex extends Component
         ])->layout('components.layouts.school');
     }
 }
-

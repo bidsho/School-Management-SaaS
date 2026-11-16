@@ -1,5 +1,7 @@
 
-<div class="container-fluid py-4">
+<div class="container-fluid py-4"
+     x-data
+     x-on:class-head-assignment-duplicate.window="window.alert($event.detail.message)">
 
     {{-- Page heading --}}
     <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
@@ -230,7 +232,7 @@
                                 {{ $editingId ? 'Edit Class Head Teacher' : 'Assign Class Head Teacher' }}
                             </h5>
                             <p class="text-muted small mb-0">
-                                Select the teacher, class and academic session.
+                                Search and select the teacher, class and academic session.
                             </p>
                         </div>
 
@@ -244,31 +246,113 @@
                         <div class="modal-body">
                             <div class="row g-3">
 
-                                <div class="col-md-6">
+                                {{-- Searchable teacher selection --}}
+                                <div class="col-12">
                                     <label class="form-label fw-semibold">
                                         Teacher <span class="text-danger">*</span>
                                     </label>
 
-                                    <select class="form-select"
-                                            wire:model="teacher_id">
-                                        <option value="">Select teacher</option>
+                                    @if ($selectedTeacher)
+                                        <div class="border rounded-3 p-3 bg-light">
+                                            <div class="d-flex justify-content-between align-items-center gap-3">
+                                                <div class="d-flex align-items-center gap-3">
+                                                    <div class="rounded-circle bg-primary-subtle text-primary d-flex align-items-center justify-content-center"
+                                                         style="width: 46px; height: 46px;">
+                                                        <i class="bi bi-person-fill fs-4"></i>
+                                                    </div>
 
-                                        @foreach ($teachers as $teacher)
-                                            <option value="{{ $teacher->id }}">
-                                                {{ $teacher->first_name }}
-                                                {{ $teacher->last_name }}
-                                                @if ($teacher->staff_number)
-                                                    — {{ $teacher->staff_number }}
-                                                @endif
-                                            </option>
-                                        @endforeach
-                                    </select>
+                                                    <div>
+                                                        <div class="fw-bold">
+                                                            {{ $selectedTeacher->first_name }}
+                                                            {{ $selectedTeacher->last_name }}
+                                                        </div>
+                                                        <small class="text-muted">
+                                                            Staff No:
+                                                            {{ $selectedTeacher->staff_number ?? 'Not available' }}
+                                                        </small>
+                                                    </div>
+                                                </div>
+
+                                                <button type="button"
+                                                        class="btn btn-sm btn-outline-danger"
+                                                        wire:click="clearTeacher">
+                                                    <i class="bi bi-x-circle me-1"></i>
+                                                    Change
+                                                </button>
+                                            </div>
+                                        </div>
+                                    @else
+                                        <div class="position-relative">
+                                            <div class="input-group">
+                                                <span class="input-group-text bg-white">
+                                                    <i class="bi bi-search"></i>
+                                                </span>
+
+                                                <input type="search"
+                                                       class="form-control"
+                                                       placeholder="Search teacher by name or staff number..."
+                                                       autocomplete="off"
+                                                       wire:model.live.debounce.300ms="teacherSearch">
+                                            </div>
+
+                                            @if ($teacherSearch !== '')
+                                                <div class="form-text">
+                                                    Search results for "{{ $teacherSearch }}"
+                                                </div>
+                                            @endif
+
+                                            <div class="border rounded-3 mt-2 shadow-sm"
+                                                 style="max-height: 240px; overflow-y: auto;">
+
+                                                @forelse ($teachers as $teacher)
+                                                    <button type="button"
+                                                            wire:key="teacher-option-{{ $teacher->id }}"
+                                                            wire:click="selectTeacher({{ $teacher->id }})"
+                                                            class="btn btn-light w-100 text-start rounded-0 border-bottom p-3">
+
+                                                        <div class="d-flex align-items-center gap-3">
+                                                            <div class="rounded-circle bg-primary-subtle text-primary d-flex align-items-center justify-content-center"
+                                                                 style="width: 38px; height: 38px;">
+                                                                <i class="bi bi-person-fill"></i>
+                                                            </div>
+
+                                                            <div>
+                                                                <div class="fw-semibold">
+                                                                    {{ $teacher->first_name }}
+                                                                    {{ $teacher->last_name }}
+                                                                </div>
+
+                                                                <small class="text-muted">
+                                                                    Staff No:
+                                                                    {{ $teacher->staff_number ?? 'Not available' }}
+                                                                </small>
+                                                            </div>
+
+                                                            <i class="bi bi-arrow-right ms-auto text-muted"></i>
+                                                        </div>
+                                                    </button>
+                                                @empty
+                                                    <div class="text-center text-muted p-4">
+                                                        <i class="bi bi-person-x fs-3"></i>
+                                                        <p class="mb-0 mt-2">
+                                                            @if ($teacherSearch !== '')
+                                                                No teacher found matching your search.
+                                                            @else
+                                                                No teachers available. Please create a teacher first.
+                                                            @endif
+                                                        </p>
+                                                    </div>
+                                                @endforelse
+                                            </div>
+                                        </div>
+                                    @endif
 
                                     @error('teacher_id')
                                         <div class="text-danger small mt-1">{{ $message }}</div>
                                     @enderror
                                 </div>
 
+                                {{-- Class --}}
                                 <div class="col-md-6">
                                     <label class="form-label fw-semibold">
                                         Class <span class="text-danger">*</span>
@@ -290,7 +374,8 @@
                                     @enderror
                                 </div>
 
-                                <div class="col-12">
+                                {{-- Academic Session --}}
+                                <div class="col-md-6">
                                     <label class="form-label fw-semibold">
                                         Academic Session <span class="text-danger">*</span>
                                     </label>
@@ -314,6 +399,7 @@
                                     @enderror
                                 </div>
 
+                                {{-- Start Date --}}
                                 <div class="col-md-6">
                                     <label class="form-label fw-semibold">
                                         Start Date
@@ -328,6 +414,7 @@
                                     @enderror
                                 </div>
 
+                                {{-- End Date --}}
                                 <div class="col-md-6">
                                     <label class="form-label fw-semibold">
                                         End Date
@@ -362,6 +449,7 @@
                                     class="btn btn-primary"
                                     wire:loading.attr="disabled"
                                     wire:target="save">
+
                                 <span wire:loading.remove wire:target="save">
                                     <i class="bi bi-check-circle me-1"></i>
                                     {{ $editingId ? 'Update Assignment' : 'Save Assignment' }}
