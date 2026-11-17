@@ -40,12 +40,26 @@ class TakeAttendance extends Component
         }
     }
 
+    /**
+     * Get the authenticated teacher and enforce permissions.
+     */
     private function currentTeacher(): TeacherModel
     {
         $user = Auth::user();
 
         abort_unless($user, 401);
-        abort_unless($user->hasRole('Teacher'), 403);
+
+        abort_unless(
+            $user->hasRole('Teacher'),
+            403,
+            'Only teachers can access this page.'
+        );
+
+        abort_unless(
+            $user->can('mark attendance'),
+            403,
+            'You do not have permission to mark attendance.'
+        );
 
         abort_unless(
             $user->school_id,
@@ -59,6 +73,9 @@ class TakeAttendance extends Component
             ->firstOrFail();
     }
 
+    /**
+     * Get only assignments belonging to the authenticated teacher.
+     */
     private function assignments()
     {
         $teacher = $this->currentTeacher();
@@ -79,6 +96,9 @@ class TakeAttendance extends Component
             ->get();
     }
 
+    /**
+     * Resolve a selected assignment without trusting the submitted ID.
+     */
     private function selectedAssignment(): ?TeacherAssignment
     {
         if (! is_numeric($this->selectedAssignmentId)) {
@@ -103,6 +123,10 @@ class TakeAttendance extends Component
             ->first();
     }
 
+    /**
+     * Get active students enrolled in the selected class,
+     * section, academic session and term.
+     */
     private function studentsForAssignment(TeacherAssignment $assignment)
     {
         $query = Enrollment::query()
@@ -126,21 +150,32 @@ class TakeAttendance extends Component
             ->values();
     }
 
+    /**
+     * Reload attendance when the selected assignment changes.
+     */
     public function updatedSelectedAssignmentId(): void
     {
         $this->resetValidation();
+
         $this->attendance = [];
         $this->remarks = [];
 
         $this->loadExistingAttendance();
     }
 
+    /**
+     * Reload attendance when the date changes.
+     */
     public function updatedAttendanceDate(): void
     {
         $this->resetValidation();
+
         $this->loadExistingAttendance();
     }
 
+    /**
+     * Load previously saved attendance for the selected class and date.
+     */
     private function loadExistingAttendance(): void
     {
         $this->attendance = [];
@@ -186,18 +221,33 @@ class TakeAttendance extends Component
         }
     }
 
+    /**
+     * Validate the date format and prevent future attendance dates.
+     */
     private function validAttendanceDate(): bool
     {
-        return is_string($this->attendanceDate)
-            && preg_match('/^\d{4}-\d{2}-\d{2}$/', $this->attendanceDate)
-            && $this->attendanceDate <= now()->toDateString()
-            && checkdate(
-                (int) substr($this->attendanceDate, 5, 2),
-                (int) substr($this->attendanceDate, 8, 2),
-                (int) substr($this->attendanceDate, 0, 4)
-            );
+        if (! is_string($this->attendanceDate)) {
+            return false;
+        }
+
+        if (! preg_match('/^\d{4}-\d{2}-\d{2}$/', $this->attendanceDate)) {
+            return false;
+        }
+
+        if ($this->attendanceDate > now()->toDateString()) {
+            return false;
+        }
+
+        return checkdate(
+            (int) substr($this->attendanceDate, 5, 2),
+            (int) substr($this->attendanceDate, 8, 2),
+            (int) substr($this->attendanceDate, 0, 4)
+        );
     }
 
+    /**
+     * Save daily attendance.
+     */
     public function saveAttendance(): void
     {
         $assignment = $this->selectedAssignment();
@@ -215,8 +265,13 @@ class TakeAttendance extends Component
         }
 
         $teacher = $this->currentTeacher();
+
         $students = $this->studentsForAssignment($assignment);
-        $studentIds = $students->pluck('student_id')->map(fn ($id) => (string) $id)->all();
+
+        $studentIds = $students
+            ->pluck('student_id')
+            ->map(fn ($id) => (string) $id)
+            ->all();
 
         if ($students->isEmpty()) {
             throw ValidationException::withMessages([
@@ -229,7 +284,12 @@ class TakeAttendance extends Component
             'remarks' => ['nullable', 'array'],
         ]);
 
-        $allowedStatuses = ['present', 'absent', 'late', 'excused'];
+        $allowedStatuses = [
+            'present',
+            'absent',
+            'late',
+            'excused',
+        ];
 
         foreach ($studentIds as $studentId) {
             $status = $this->attendance[$studentId] ?? null;
@@ -276,11 +336,17 @@ class TakeAttendance extends Component
             }
         });
 
-        session()->flash('success', 'Attendance saved successfully.');
+        session()->flash(
+            'success',
+            'Attendance saved successfully.'
+        );
 
         $this->loadExistingAttendance();
     }
 
+    /**
+     * Submit the term attendance report to the administrator.
+     */
     public function submitTermReport(): void
     {
         $assignment = $this->selectedAssignment();
@@ -297,7 +363,7 @@ class TakeAttendance extends Component
             'teacherRemarks' => ['nullable', 'string', 'max:2000'],
         ]);
 
-        $existingPending = AttendanceTermSubmission::query()
+        $submissionQuery = AttendanceTermSubmission::query()
             ->where('school_id', $teacher->school_id)
             ->where('teacher_id', $teacher->id)
             ->where('class_room_id', $assignment->class_room_id)
@@ -310,7 +376,9 @@ class TakeAttendance extends Component
                     'section_id',
                     $assignment->section_id
                 )
-            )
+            );
+
+        $existingPending = (clone $submissionQuery)
             ->where('status', 'pending')
             ->exists();
 
@@ -318,6 +386,17 @@ class TakeAttendance extends Component
             throw ValidationException::withMessages([
                 'selectedAssignmentId' =>
                     'This class attendance report has already been submitted and is awaiting administrator review.',
+            ]);
+        }
+
+        $existingApproved = (clone $submissionQuery)
+            ->where('status', 'approved')
+            ->exists();
+
+        if ($existingApproved) {
+            throw ValidationException::withMessages([
+                'selectedAssignmentId' =>
+                    'This attendance report has already been approved.',
             ]);
         }
 
@@ -373,9 +452,15 @@ class TakeAttendance extends Component
         $this->teacherRemarks = '';
     }
 
+    /**
+     * Render the attendance page.
+     */
     public function render()
     {
+        $teacher = $this->currentTeacher();
+
         $assignments = $this->assignments();
+
         $selectedAssignment = $this->selectedAssignment();
 
         $students = $selectedAssignment
@@ -385,8 +470,6 @@ class TakeAttendance extends Component
         $submission = null;
 
         if ($selectedAssignment) {
-            $teacher = $this->currentTeacher();
-
             $submission = AttendanceTermSubmission::query()
                 ->where('school_id', $teacher->school_id)
                 ->where('teacher_id', $teacher->id)
