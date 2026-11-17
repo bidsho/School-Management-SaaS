@@ -6,7 +6,7 @@
         <div>
             <h3 class="fw-bold mb-1">Register Teacher</h3>
             <p class="text-muted mb-0">
-                Add a new member of your school's teaching staff and create their login account.
+                Add a teacher to your school and create their login account.
             </p>
         </div>
 
@@ -30,12 +30,12 @@
         </div>
     @endif
 
-    {{-- General Error Message --}}
+    {{-- Validation Errors --}}
     @if ($errors->any())
         <div class="alert alert-danger" role="alert">
             <div class="fw-semibold mb-2">
                 <i class="bi bi-exclamation-triangle me-2"></i>
-                Please correct the errors below.
+                Please correct the following errors.
             </div>
 
             <ul class="mb-0">
@@ -48,13 +48,11 @@
 
     <form wire:submit="save">
 
-        {{-- =====================================================
-             PERSONAL INFORMATION
-        ====================================================== --}}
+        {{-- PERSONAL INFORMATION --}}
         <div class="card border-0 shadow-sm rounded-3 mb-4">
 
             <div class="card-header bg-white py-3">
-                <h5 class="mb-0 fw-semibold">
+                <h5 class="mb-1 fw-semibold">
                     <i class="bi bi-person-badge me-2 text-primary"></i>
                     Personal Information
                 </h5>
@@ -249,9 +247,7 @@
             </div>
         </div>
 
-        {{-- =====================================================
-             TEACHER LOGIN ACCOUNT
-        ====================================================== --}}
+        {{-- LOGIN ACCOUNT --}}
         <div class="card border-0 shadow-sm rounded-3 mb-4">
 
             <div class="card-header bg-white py-3">
@@ -261,19 +257,22 @@
                 </h5>
 
                 <small class="text-muted">
-                    Create the account the teacher will use to sign in to the school portal.
+                    Create the login credentials the teacher will use to access EduPilot.
                 </small>
             </div>
 
             <div class="card-body p-4">
+
                 <div class="alert alert-info d-flex align-items-start gap-2">
                     <i class="bi bi-info-circle-fill mt-1"></i>
 
                     <div>
-                        <strong>Login details</strong>
+                        <strong>Automatic account configuration</strong>
+
                         <p class="mb-0 small">
-                            Use a valid email address and a strong initial password.
-                            The teacher will sign in through your existing login page.
+                            The teacher will automatically receive the Teacher role
+                            and access to this school's portal. No school selection
+                            is required.
                         </p>
                     </div>
                 </div>
@@ -300,7 +299,7 @@
                         @enderror
 
                         <small class="text-muted">
-                            This email must not already belong to another user account.
+                            This email must not already belong to another account.
                         </small>
                     </div>
 
@@ -324,7 +323,7 @@
                         @enderror
 
                         <small class="text-muted">
-                            Choose a strong password and share it securely.
+                            Use a strong password and share it securely.
                         </small>
                     </div>
 
@@ -348,15 +347,39 @@
             </div>
         </div>
 
-        {{-- =====================================================
-             FORM ACTIONS
-        ====================================================== --}}
+        {{-- AUTOMATIC ROLE AND SCHOOL --}}
+        <div class="card border-0 shadow-sm rounded-3 mb-4">
+            <div class="card-body p-4">
+
+                <div class="d-flex align-items-start gap-3">
+                    <div class="rounded-circle bg-success-subtle text-success p-3">
+                        <i class="bi bi-check-circle-fill fs-5"></i>
+                    </div>
+
+                    <div>
+                        <h6 class="fw-bold mb-2">Automatic Teacher Setup</h6>
+
+                        <p class="text-muted small mb-2">
+                            When you register this teacher, EduPilot automatically:
+                        </p>
+
+                        <ul class="small text-muted mb-0">
+                            <li>Creates the teacher's user account.</li>
+                            <li>Assigns the Teacher role.</li>
+                            <li>Associates the teacher with your school.</li>
+                            <li>Creates the teacher's staff profile.</li>
+                        </ul>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        {{-- FORM ACTIONS --}}
         <div class="d-flex justify-content-end gap-2 flex-wrap mb-4">
 
-            <a
-                href="{{ route('school.teachers.index') }}"
-                class="btn btn-light border"
-            >
+            <a href="{{ route('school.teachers.index') }}"
+               class="btn btn-light border">
                 <i class="bi bi-x-circle me-1"></i>
                 Cancel
             </a>
@@ -374,11 +397,12 @@
 
                 <span wire:loading wire:target="save">
                     <span class="spinner-border spinner-border-sm me-1"></span>
-                    Creating Account...
+                    Creating Teacher Account...
                 </span>
             </button>
 
         </div>
 
     </form>
+
 </div>
