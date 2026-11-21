@@ -44,6 +44,12 @@ class TimetableIndex extends Component
     public string $ends_at = '';
     public string $room = '';
 
+    /*
+    |--------------------------------------------------------------------------
+    | School/Tenant Security
+    |--------------------------------------------------------------------------
+    */
+
     private function schoolId(): int
     {
         abort_unless(
@@ -55,20 +61,40 @@ class TimetableIndex extends Component
         return (int) auth()->user()->school_id;
     }
 
+    /*
+    |--------------------------------------------------------------------------
+    | Timetable Authorization
+    |--------------------------------------------------------------------------
+    | Any user with the "manage timetable" permission can manage timetables.
+    | This allows both School Admin and Principal, without relying on role names.
+    */
+
     private function authorizeManager(): void
     {
         abort_unless(
-            auth()->user()?->hasRole('School Admin'),
+            auth()->user()?->can('manage timetable'),
             403,
-            'Only a School Admin can manage the timetable.'
+            'You do not have permission to manage the timetable.'
         );
     }
+
+    /*
+    |--------------------------------------------------------------------------
+    | School-Scoped Timetable Entries
+    |--------------------------------------------------------------------------
+    */
 
     private function entries(): Builder
     {
         return TimetableEntry::query()
             ->where('school_id', $this->schoolId());
     }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Search and Filter Pagination
+    |--------------------------------------------------------------------------
+    */
 
     public function updatingSearch(): void
     {
@@ -85,13 +111,26 @@ class TimetableIndex extends Component
         $this->resetPage();
     }
 
+    /*
+    |--------------------------------------------------------------------------
+    | Create Timetable Entry
+    |--------------------------------------------------------------------------
+    */
+
     public function create(): void
     {
         $this->authorizeManager();
 
         $this->resetForm();
+
         $this->showForm = true;
     }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Edit Timetable Entry
+    |--------------------------------------------------------------------------
+    */
 
     public function edit(int $id): void
     {
@@ -113,6 +152,12 @@ class TimetableIndex extends Component
 
         $this->showForm = true;
     }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Validation Rules
+    |--------------------------------------------------------------------------
+    */
 
     protected function rules(): array
     {
@@ -174,27 +219,50 @@ class TimetableIndex extends Component
                 ]),
             ],
 
-            'starts_at' => ['required', 'date_format:H:i'],
+            'starts_at' => [
+                'required',
+                'date_format:H:i',
+            ],
+
             'ends_at' => [
                 'required',
                 'date_format:H:i',
                 'after:starts_at',
             ],
 
-            'room' => ['nullable', 'string', 'max:100'],
+            'room' => [
+                'nullable',
+                'string',
+                'max:100',
+            ],
         ];
     }
 
     protected function messages(): array
     {
         return [
-            'academic_session_id.required' => 'Please select an academic session.',
-            'class_room_id.required' => 'Please select a class.',
-            'subject_id.required' => 'Please select a subject.',
-            'ends_at.after' => 'The ending time must be later than the starting time.',
-            '*.exists' => 'One of your selected options is invalid for this school.',
+            'academic_session_id.required' =>
+                'Please select an academic session.',
+
+            'class_room_id.required' =>
+                'Please select a class.',
+
+            'subject_id.required' =>
+                'Please select a subject.',
+
+            'ends_at.after' =>
+                'The ending time must be later than the starting time.',
+
+            '*.exists' =>
+                'One of your selected options is invalid for this school.',
         ];
     }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Save Timetable Entry
+    |--------------------------------------------------------------------------
+    */
 
     public function save(): void
     {
@@ -202,12 +270,20 @@ class TimetableIndex extends Component
 
         $validated = $this->validate();
 
+        // Preserve the edit state before resetForm() clears editingId.
+        $wasEditing = $this->editingId !== null;
+
         // Re-check the existing record within the authenticated school.
         $entry = $this->editingId
             ? $this->entries()->findOrFail($this->editingId)
             : new TimetableEntry();
 
-        // Extra validation: section must belong to the selected class.
+        /*
+        |--------------------------------------------------------------------------
+        | Ensure Section Belongs to Selected Class
+        |--------------------------------------------------------------------------
+        */
+
         if ($this->section_id !== '') {
             $section = Section::query()
                 ->where('school_id', $this->schoolId())
@@ -224,14 +300,27 @@ class TimetableIndex extends Component
             }
         }
 
+        /*
+        |--------------------------------------------------------------------------
+        | Prepare Data
+        |--------------------------------------------------------------------------
+        */
+
         $validated['school_id'] = $this->schoolId();
 
         $validated['term_id'] = $this->term_id ?: null;
         $validated['section_id'] = $this->section_id ?: null;
         $validated['teacher_id'] = $this->teacher_id ?: null;
+
         $validated['room'] = trim($this->room) !== ''
             ? trim($this->room)
             : null;
+
+        /*
+        |--------------------------------------------------------------------------
+        | Save
+        |--------------------------------------------------------------------------
+        */
 
         $entry->fill($validated);
         $entry->save();
@@ -241,46 +330,77 @@ class TimetableIndex extends Component
 
         session()->flash(
             'success',
-            $this->editingId
+            $wasEditing
                 ? 'Timetable entry updated successfully.'
                 : 'Timetable entry created successfully.'
         );
     }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Delete Timetable Entry
+    |--------------------------------------------------------------------------
+    */
 
     public function delete(int $id): void
     {
         $this->authorizeManager();
 
         $entry = $this->entries()->findOrFail($id);
+
         $entry->delete();
 
         $this->resetPage();
 
-        session()->flash('success', 'Timetable entry deleted successfully.');
+        session()->flash(
+            'success',
+            'Timetable entry deleted successfully.'
+        );
     }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Cancel Form
+    |--------------------------------------------------------------------------
+    */
 
     public function cancel(): void
     {
         $this->resetForm();
     }
 
+    /*
+    |--------------------------------------------------------------------------
+    | Reset Form
+    |--------------------------------------------------------------------------
+    */
+
     private function resetForm(): void
     {
         $this->resetValidation();
 
         $this->editingId = null;
+
         $this->academic_session_id = '';
         $this->term_id = '';
         $this->class_room_id = '';
         $this->section_id = '';
         $this->subject_id = '';
         $this->teacher_id = '';
+
         $this->day_of_week = 'Monday';
         $this->starts_at = '';
         $this->ends_at = '';
         $this->room = '';
+
         $this->showForm = false;
     }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Render
+    |--------------------------------------------------------------------------
+    */
 
     public function render()
     {
@@ -341,25 +461,32 @@ class TimetableIndex extends Component
 
         return view('livewire.school.timetables.timetable-index', [
             'entries' => $entries,
+
             'sessions' => AcademicSession::where('school_id', $schoolId)
                 ->orderByDesc('id')
                 ->get(),
+
             'terms' => Term::where('school_id', $schoolId)
                 ->orderByDesc('id')
                 ->get(),
+
             'classes' => ClassRoom::where('school_id', $schoolId)
                 ->orderBy('name')
                 ->get(),
+
             'sections' => Section::where('school_id', $schoolId)
                 ->orderBy('name')
                 ->get(),
+
             'subjects' => Subject::where('school_id', $schoolId)
                 ->orderBy('name')
                 ->get(),
+
             'teachers' => Teacher::where('school_id', $schoolId)
                 ->orderBy('first_name')
                 ->orderBy('last_name')
                 ->get(),
+
             'days' => [
                 'Monday',
                 'Tuesday',

@@ -10,6 +10,7 @@ use App\Models\Teacher;
 use App\Models\TeacherAssignment;
 use App\Models\Term;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Livewire\Component;
 
@@ -23,13 +24,27 @@ class TeacherAssignmentCreate extends Component
     public $academic_session_id = '';
     public $term_id = '';
 
-    private function schoolId(): int
+    /**
+     * Ensure only authorized school users can access this page.
+     */
+    private function authorizeAccess(): void
     {
         $user = Auth::user();
 
         abort_unless($user && $user->school_id, 403);
 
-        return (int) $user->school_id;
+        abort_unless(
+            $user->can('create teacher assignments'),
+            403,
+            'You do not have permission to create teacher assignments.'
+        );
+    }
+
+    private function schoolId(): int
+    {
+        $this->authorizeAccess();
+
+        return (int) Auth::user()->school_id;
     }
 
     protected function rules(): array
@@ -41,21 +56,24 @@ class TeacherAssignmentCreate extends Component
                 'required',
                 'integer',
                 Rule::exists('teachers', 'id')
-                    ->where('school_id', $schoolId),
+                    ->where('school_id', $schoolId)
+                    ->where('employment_status', 'active'),
             ],
 
             'subject_id' => [
                 'required',
                 'integer',
                 Rule::exists('subjects', 'id')
-                    ->where('school_id', $schoolId),
+                    ->where('school_id', $schoolId)
+                    ->where('status', 'active'),
             ],
 
             'class_room_id' => [
                 'required',
                 'integer',
                 Rule::exists('class_rooms', 'id')
-                    ->where('school_id', $schoolId),
+                    ->where('school_id', $schoolId)
+                    ->where('status', 'active'),
             ],
 
             'section_id' => [
@@ -63,7 +81,8 @@ class TeacherAssignmentCreate extends Component
                 'integer',
                 Rule::exists('sections', 'id')
                     ->where('school_id', $schoolId)
-                    ->where('class_room_id', $this->class_room_id),
+                    ->where('class_room_id', $this->class_room_id)
+                    ->where('status', 'active'),
             ],
 
             'academic_session_id' => [
@@ -84,7 +103,7 @@ class TeacherAssignmentCreate extends Component
     }
 
     /**
-     * Clear the selected teacher whenever the search changes.
+     * Clear selected teacher when search changes.
      */
     public function updatedTeacherSearch(): void
     {
@@ -94,12 +113,13 @@ class TeacherAssignmentCreate extends Component
     }
 
     /**
-     * Select a teacher from the search results.
+     * Select a teacher from search results.
      */
     public function selectTeacher(int $teacherId): void
     {
         $teacher = Teacher::withoutGlobalScopes()
             ->where('school_id', $this->schoolId())
+            ->where('employment_status', 'active')
             ->findOrFail($teacherId);
 
         $this->teacher_id = (string) $teacher->id;
@@ -114,7 +134,7 @@ class TeacherAssignmentCreate extends Component
     }
 
     /**
-     * Clear the selected teacher.
+     * Clear selected teacher.
      */
     public function clearTeacher(): void
     {
@@ -124,6 +144,9 @@ class TeacherAssignmentCreate extends Component
         $this->resetValidation('teacher_id');
     }
 
+    /**
+     * Reset section when class changes.
+     */
     public function updatedClassRoomId(): void
     {
         $this->section_id = '';
@@ -131,6 +154,9 @@ class TeacherAssignmentCreate extends Component
         $this->resetValidation('section_id');
     }
 
+    /**
+     * Reset term when academic session changes.
+     */
     public function updatedAcademicSessionId(): void
     {
         $this->term_id = '';
@@ -138,36 +164,39 @@ class TeacherAssignmentCreate extends Component
         $this->resetValidation('term_id');
     }
 
+    /**
+     * Save teacher assignment.
+     */
     public function save(): void
     {
-        $user = Auth::user();
-
-        abort_unless(
-            $user && $user->can('create teacher assignments'),
-            403
-        );
+        $schoolId = $this->schoolId();
 
         $validated = $this->validate();
 
-        $schoolId = $this->schoolId();
+        $sectionId = $validated['section_id'] ?: null;
+        $termId = $validated['term_id'] ?: null;
 
-        // Check whether this exact assignment already exists.
-        $duplicate = TeacherAssignment::withoutGlobalScopes()
+        // Check for an existing assignment.
+        $duplicateQuery = TeacherAssignment::withoutGlobalScopes()
             ->where('school_id', $schoolId)
             ->where('teacher_id', $validated['teacher_id'])
             ->where('subject_id', $validated['subject_id'])
             ->where('class_room_id', $validated['class_room_id'])
-            ->where('section_id', $validated['section_id'] ?: null)
-            ->where('academic_session_id', $validated['academic_session_id'])
-            ->where('term_id', $validated['term_id'] ?: null)
-            ->exists();
+            ->where('academic_session_id', $validated['academic_session_id']);
 
-        if ($duplicate) {
+        $sectionId === null
+            ? $duplicateQuery->whereNull('section_id')
+            : $duplicateQuery->where('section_id', $sectionId);
+
+        $termId === null
+            ? $duplicateQuery->whereNull('term_id')
+            : $duplicateQuery->where('term_id', $termId);
+
+        if ($duplicateQuery->exists()) {
             $message = 'This teacher has already been assigned to this subject, class and academic period.';
 
             $this->addError('teacher_id', $message);
 
-            // Display a popup warning.
             $this->dispatch(
                 'assignment-duplicate',
                 message: $message
@@ -176,12 +205,22 @@ class TeacherAssignmentCreate extends Component
             return;
         }
 
-        TeacherAssignment::create([
-            ...$validated,
-            'school_id' => $schoolId,
-            'section_id' => $validated['section_id'] ?: null,
-            'term_id' => $validated['term_id'] ?: null,
-        ]);
+        DB::transaction(function () use (
+            $validated,
+            $schoolId,
+            $sectionId,
+            $termId
+        ) {
+            TeacherAssignment::create([
+                'school_id' => $schoolId,
+                'teacher_id' => $validated['teacher_id'],
+                'subject_id' => $validated['subject_id'],
+                'class_room_id' => $validated['class_room_id'],
+                'section_id' => $sectionId,
+                'academic_session_id' => $validated['academic_session_id'],
+                'term_id' => $termId,
+            ]);
+        });
 
         session()->flash(
             'success',
@@ -195,19 +234,20 @@ class TeacherAssignmentCreate extends Component
     {
         $schoolId = $this->schoolId();
 
-        // Search teachers belonging only to the current school.
         $teachers = collect();
 
+        // Search active teachers in the current school only.
         if (!$this->teacher_id && trim($this->teacherSearch) !== '') {
             $search = trim($this->teacherSearch);
 
             $teachers = Teacher::withoutGlobalScopes()
                 ->where('school_id', $schoolId)
+                ->where('employment_status', 'active')
                 ->where(function ($query) use ($search) {
-                    $query->where('first_name', 'like', "%{$search}%")
-                        ->orWhere('middle_name', 'like', "%{$search}%")
-                        ->orWhere('last_name', 'like', "%{$search}%")
-                        ->orWhere('staff_number', 'like', "%{$search}%");
+                    $query->where('first_name', 'ilike', "%{$search}%")
+                        ->orWhere('middle_name', 'ilike', "%{$search}%")
+                        ->orWhere('last_name', 'ilike', "%{$search}%")
+                        ->orWhere('staff_number', 'ilike', "%{$search}%");
                 })
                 ->orderBy('first_name')
                 ->orderBy('last_name')
@@ -218,6 +258,7 @@ class TeacherAssignmentCreate extends Component
         $selectedTeacher = $this->teacher_id
             ? Teacher::withoutGlobalScopes()
                 ->where('school_id', $schoolId)
+                ->where('employment_status', 'active')
                 ->find($this->teacher_id)
             : null;
 
@@ -241,6 +282,7 @@ class TeacherAssignmentCreate extends Component
 
                 'sections' => Section::withoutGlobalScopes()
                     ->where('school_id', $schoolId)
+                    ->where('school_id', $schoolId)
                     ->when(
                         $this->class_room_id,
                         fn ($query) => $query->where(
@@ -248,6 +290,7 @@ class TeacherAssignmentCreate extends Component
                             $this->class_room_id
                         )
                     )
+                    ->where('status', 'active')
                     ->orderBy('name')
                     ->get(),
 
