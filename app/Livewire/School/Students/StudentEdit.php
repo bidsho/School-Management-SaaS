@@ -5,6 +5,7 @@ namespace App\Livewire\School\Students;
 use App\Models\SchoolParent;
 use App\Models\Student;
 use App\Models\User;
+use App\Livewire\Concerns\UsesPortalLayout;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -14,11 +15,11 @@ use Illuminate\Validation\Rule;
 use Livewire\Attributes\Locked;
 use Livewire\Component;
 use Throwable;
-use App\Livewire\Concerns\UsesPortalLayout;
 
 class StudentEdit extends Component
 {
     use UsesPortalLayout;
+
     #[Locked]
     public int $studentId;
 
@@ -38,9 +39,12 @@ class StudentEdit extends Component
 
     public bool $createLoginAccount = false;
 
-    /**
-     * Resolve the current school and authorize access.
-     */
+    /*
+    |--------------------------------------------------------------------------
+    | School Authorization
+    |--------------------------------------------------------------------------
+    */
+
     private function schoolId(): int
     {
         $user = Auth::user();
@@ -52,15 +56,24 @@ class StudentEdit extends Component
         return (int) $user->school_id;
     }
 
-    /**
-     * Always retrieve the student within the authenticated user's school.
-     */
+    /*
+    |--------------------------------------------------------------------------
+    | Retrieve Student Safely
+    |--------------------------------------------------------------------------
+    */
+
     private function studentRecord(): Student
     {
         return Student::withoutGlobalScopes()
             ->where('school_id', $this->schoolId())
             ->findOrFail($this->studentId);
     }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Initialize Component
+    |--------------------------------------------------------------------------
+    */
 
     public function mount(int $student): void
     {
@@ -88,9 +101,14 @@ class StudentEdit extends Component
         $this->address = $record->address ?? '';
         $this->status = $record->status ?? 'active';
 
-        // Never enable account creation automatically for an existing account.
+        /*
+         * Existing student accounts must not be recreated.
+         */
         $this->createLoginAccount = false;
 
+        /*
+         * Load the current primary parent.
+         */
         $primaryParent = $record->parents->first(
             fn ($parent) => (bool) $parent->pivot->is_primary
         );
@@ -103,13 +121,15 @@ class StudentEdit extends Component
             ?: 'parent';
     }
 
-    /**
-     * Validation rules for student details and parent selection.
-     */
+    /*
+    |--------------------------------------------------------------------------
+    | Validation
+    |--------------------------------------------------------------------------
+    */
+
     protected function rules(): array
     {
         $schoolId = $this->schoolId();
-
         $student = $this->studentRecord();
 
         $emailRules = [
@@ -121,7 +141,9 @@ class StudentEdit extends Component
                 ->ignore($student->id),
         ];
 
-        // A student with a login account must retain a valid login email.
+        /*
+         * Existing login accounts must have a valid email.
+         */
         if ($student->user_id || $this->createLoginAccount) {
             $emailRules = [
                 'required',
@@ -216,10 +238,19 @@ class StudentEdit extends Component
         ];
     }
 
+    /*
+    |--------------------------------------------------------------------------
+    | Save Student
+    |--------------------------------------------------------------------------
+    */
+
     public function save()
     {
         $schoolId = $this->schoolId();
 
+        /*
+         * Always retrieve the student from the current school.
+         */
         $student = Student::withoutGlobalScopes()
             ->where('school_id', $schoolId)
             ->with('user')
@@ -227,24 +258,29 @@ class StudentEdit extends Component
 
         $validated = $this->validate();
 
-        /*
-         * Validate the login email against the users table.
-         * This is separate from the students table's email constraint.
-         */
         $loginUser = $student->user;
 
+        /*
+         * Validate the login email separately from the student email.
+         */
         if ($loginUser || $this->createLoginAccount) {
-            $userEmailRules = [
-                'required',
-                'email',
-                'max:255',
-                Rule::unique('users', 'email')
-                    ->ignore($loginUser?->id),
-            ];
-
             $this->validate([
-                'email' => $userEmailRules,
+                'email' => [
+                    'required',
+                    'email',
+                    'max:255',
+                    Rule::unique('users', 'email')
+                        ->ignore($loginUser?->id),
+                ],
             ]);
+        }
+
+        /*
+         * Prevent inconsistent records where user_id exists
+         * but the associated User record cannot be loaded.
+         */
+        if ($student->user_id && ! $student->user) {
+            abort(409, 'The student login account is inconsistent. Please contact the system administrator.');
         }
 
         $studentUser = null;
@@ -258,8 +294,7 @@ class StudentEdit extends Component
             &$createdLoginAccount
         ) {
             /*
-             * Create a login account only when explicitly requested
-             * and when this student does not already have one.
+             * Create a login account only when explicitly requested.
              */
             if (! $student->user_id && $this->createLoginAccount) {
                 $studentUser = new User();
@@ -276,16 +311,26 @@ class StudentEdit extends Component
 
                 $studentUser->save();
 
+                /*
+                 * Assign the Student role.
+                 */
                 $studentUser->assignRole('Student');
 
+                /*
+                 * Link the new account to the student.
+                 */
                 $student->user_id = $studentUser->id;
 
                 $createdLoginAccount = true;
-            } elseif ($student->user) {
-                /*
-                 * Keep an existing student login's name and email
-                 * synchronized with the student record.
-                 */
+            }
+
+            /*
+             * Synchronize an existing login account.
+             *
+             * This also corrects an existing user's school_id
+             * if it was previously missing or incorrect.
+             */
+            elseif ($student->user) {
                 $studentUser = $student->user;
 
                 $studentUser->name = trim(
@@ -294,13 +339,19 @@ class StudentEdit extends Component
                 );
 
                 $studentUser->email = $validated['email'];
+
+                /*
+                 * IMPORTANT:
+                 * Ensure the linked student user belongs
+                 * to the correct school.
+                 */
                 $studentUser->school_id = $schoolId;
 
                 $studentUser->save();
             }
 
             /*
-             * Update student information.
+             * Update the student record.
              */
             $student->fill([
                 'first_name' => $validated['first_name'],
@@ -315,11 +366,17 @@ class StudentEdit extends Component
                 'status' => $validated['status'],
             ]);
 
+            /*
+             * Ensure the student record also retains
+             * the correct school_id.
+             */
+            $student->school_id = $schoolId;
+
             $student->save();
 
             /*
-             * Remove only the current primary-parent link.
-             * Other linked guardians are preserved.
+             * Remove the existing primary parent relationship only.
+             * Other parent/guardian relationships are preserved.
              */
             $student->parents()
                 ->newPivotStatement()
@@ -329,7 +386,7 @@ class StudentEdit extends Component
                 ->delete();
 
             /*
-             * If a parent was selected, mark that link as primary.
+             * Attach the selected parent as the primary parent.
              */
             if (! empty($validated['parentId'])) {
                 $parent = SchoolParent::query()
@@ -358,12 +415,17 @@ class StudentEdit extends Component
                     );
                 }
             }
-        });
+        }, 3);
 
         /*
-         * Send the password setup link after the database transaction.
-         * A delivery failure must not undo the saved student record.
-         */
+        |--------------------------------------------------------------------------
+        | Send Password Setup Link
+        |--------------------------------------------------------------------------
+        |
+        | Email is sent after the transaction so a mail failure
+        | does not roll back the student update.
+        */
+
         $passwordLinkSent = false;
 
         if ($createdLoginAccount && $studentUser) {
@@ -372,12 +434,17 @@ class StudentEdit extends Component
                     'email' => $studentUser->email,
                 ]);
 
-                $passwordLinkSent = $status === Password::RESET_LINK_SENT;
+                $passwordLinkSent =
+                    $status === Password::RESET_LINK_SENT;
+
             } catch (Throwable $exception) {
                 report($exception);
             }
         }
 
+        /*
+         * User feedback.
+         */
         if ($createdLoginAccount && $passwordLinkSent) {
             session()->flash(
                 'success',
@@ -386,7 +453,7 @@ class StudentEdit extends Component
         } elseif ($createdLoginAccount) {
             session()->flash(
                 'warning',
-                'Student updated and login account created, but the password setup email could not be confirmed. Check your mail configuration and use the password reset process to send the link again.'
+                'Student updated and login account created, but the password setup email could not be confirmed. Check your mail configuration and resend the password setup link.'
             );
         } else {
             session()->flash(
@@ -398,6 +465,12 @@ class StudentEdit extends Component
         return redirect()->route('school.students.index');
     }
 
+    /*
+    |--------------------------------------------------------------------------
+    | Render
+    |--------------------------------------------------------------------------
+    */
+
     public function render()
     {
         $schoolId = $this->schoolId();
@@ -407,6 +480,9 @@ class StudentEdit extends Component
             ->with('user')
             ->findOrFail($this->studentId);
 
+        /*
+         * Parents are restricted to the current school.
+         */
         $parents = SchoolParent::query()
             ->where('school_id', $schoolId)
             ->orderBy('first_name')

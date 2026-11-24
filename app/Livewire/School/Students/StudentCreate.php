@@ -5,6 +5,7 @@ namespace App\Livewire\School\Students;
 use App\Models\SchoolParent;
 use App\Models\Student;
 use App\Models\User;
+use App\Livewire\Concerns\UsesPortalLayout;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -12,11 +13,11 @@ use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Livewire\Component;
-use App\Livewire\Concerns\UsesPortalLayout;
 
 class StudentCreate extends Component
 {
     use UsesPortalLayout;
+
     public string $admission_number = '';
     public string $first_name = '';
     public string $middle_name = '';
@@ -27,11 +28,26 @@ class StudentCreate extends Component
     public string $phone = '';
     public string $address = '';
 
-    // Parent / guardian selection.
+    // Parent / guardian selection
     public string $parentId = '';
     public string $parentSearch = '';
     public bool $showParentResults = false;
     public string $relationship = 'parent';
+
+    /**
+     * Get the authenticated school user's school ID.
+     * Never trust a school_id submitted from the frontend.
+     */
+    private function getSchoolId(): int
+    {
+        $user = Auth::user();
+
+        abort_unless($user, 401);
+        abort_if($user->isSuperAdmin(), 403);
+        abort_unless($user->school_id, 403);
+
+        return (int) $user->school_id;
+    }
 
     /**
      * Clear the selected parent when the search changes.
@@ -40,6 +56,7 @@ class StudentCreate extends Component
     {
         $this->parentId = '';
         $this->showParentResults = true;
+
         $this->resetValidation('parentId');
     }
 
@@ -56,14 +73,10 @@ class StudentCreate extends Component
      */
     public function selectParent(int $parentId): void
     {
-        $user = Auth::user();
-
-        abort_unless($user, 401);
-        abort_if($user->isSuperAdmin(), 403);
-        abort_unless($user->school_id, 403);
+        $schoolId = $this->getSchoolId();
 
         $parent = SchoolParent::query()
-            ->where('school_id', $user->school_id)
+            ->where('school_id', $schoolId)
             ->findOrFail($parentId);
 
         $this->parentId = (string) $parent->id;
@@ -73,6 +86,7 @@ class StudentCreate extends Component
         );
 
         $this->showParentResults = false;
+
         $this->resetValidation('parentId');
     }
 
@@ -84,6 +98,7 @@ class StudentCreate extends Component
         $this->parentId = '';
         $this->parentSearch = '';
         $this->showParentResults = false;
+
         $this->resetValidation('parentId');
     }
 
@@ -92,13 +107,13 @@ class StudentCreate extends Component
      */
     public function save()
     {
-        $user = Auth::user();
+        $schoolId = $this->getSchoolId();
 
-        abort_unless($user, 401);
-        abort_if($user->isSuperAdmin(), 403);
-        abort_unless($user->school_id, 403);
-
-        $schoolId = (int) $user->school_id;
+        /*
+        |--------------------------------------------------------------------------
+        | Validate Student Data
+        |--------------------------------------------------------------------------
+        */
 
         $validated = $this->validate([
             'admission_number' => [
@@ -178,44 +193,104 @@ class StudentCreate extends Component
             ],
         ]);
 
+        /*
+        |--------------------------------------------------------------------------
+        | Create User and Student Atomically
+        |--------------------------------------------------------------------------
+        |
+        | If either record fails, the entire transaction is rolled back.
+        | Both records always receive the authenticated school ID.
+        |
+        */
+
         $student = DB::transaction(function () use (
             $validated,
             $schoolId
         ) {
-            // Create a login account with a random, unknown password.
+
+            /*
+            |--------------------------------------------------------------------------
+            | Create Student Login Account
+            |--------------------------------------------------------------------------
+            */
+
             $studentUser = User::create([
                 'name' => trim(
                     $validated['first_name'] . ' ' .
                     $validated['last_name']
                 ),
+
                 'email' => $validated['email'],
+
+                // Random password; student must set their own password.
                 'password' => Hash::make(Str::random(64)),
+
+                // Critical: always assign the authenticated school.
                 'school_id' => $schoolId,
             ]);
 
-            // Give the student the Student role.
+            /*
+            |--------------------------------------------------------------------------
+            | Assign Student Role
+            |--------------------------------------------------------------------------
+            */
+
             $studentUser->assignRole('Student');
 
-            // Create the student record.
+            /*
+            |--------------------------------------------------------------------------
+            | Create Student Profile
+            |--------------------------------------------------------------------------
+            */
+
             $student = new Student();
 
             $student->forceFill([
                 'school_id' => $schoolId,
                 'user_id' => $studentUser->id,
+
                 'admission_number' => $validated['admission_number'],
+
                 'first_name' => $validated['first_name'],
                 'middle_name' => $validated['middle_name'] ?: null,
                 'last_name' => $validated['last_name'],
+
                 'date_of_birth' => $validated['date_of_birth'] ?: null,
                 'gender' => $validated['gender'] ?: null,
+
                 'email' => $validated['email'],
                 'phone' => $validated['phone'] ?: null,
                 'address' => $validated['address'] ?: null,
-                'status' => 'active',
-            ])->save();
 
-            // Link an existing parent when one was selected.
+                'status' => 'active',
+            ]);
+
+            $student->save();
+
+            /*
+            |--------------------------------------------------------------------------
+            | Verify User/Profile School Integrity
+            |--------------------------------------------------------------------------
+            */
+
+            if (
+                (int) $student->school_id !== $schoolId ||
+                (int) $studentUser->school_id !== $schoolId ||
+                (int) $student->user_id !== (int) $studentUser->id
+            ) {
+                throw new \RuntimeException(
+                    'Student school or user linkage integrity check failed.'
+                );
+            }
+
+            /*
+            |--------------------------------------------------------------------------
+            | Attach Parent / Guardian
+            |--------------------------------------------------------------------------
+            */
+
             if (!empty($validated['parentId'])) {
+
                 $parent = SchoolParent::query()
                     ->where('school_id', $schoolId)
                     ->findOrFail((int) $validated['parentId']);
@@ -228,22 +303,35 @@ class StudentCreate extends Component
             }
 
             return $student;
-        });
+        }, 3);
 
-        // Send the student a password setup link.
+        /*
+        |--------------------------------------------------------------------------
+        | Send Password Setup Link
+        |--------------------------------------------------------------------------
+        |
+        | This happens after the transaction commits so mail failure
+        | cannot roll back a successfully created student.
+        |
+        */
+
         try {
+
             $status = Password::sendResetLink([
                 'email' => $student->email,
             ]);
 
             if ($status === Password::RESET_LINK_SENT) {
+
                 session()->flash(
                     'success',
                     'Student registered successfully. A password setup link has been sent to the student email.'
                 );
+
             } else {
+
                 report(new \RuntimeException(
-                    'Student created, but the password setup link could not be sent: ' . $status
+                    'Student created, but password setup link failed: ' . $status
                 ));
 
                 session()->flash(
@@ -251,7 +339,9 @@ class StudentCreate extends Component
                     'Student registered successfully, but the password setup link could not be sent. Check your mail and password-reset configuration.'
                 );
             }
+
         } catch (\Throwable $exception) {
+
             report($exception);
 
             session()->flash(
@@ -268,19 +358,18 @@ class StudentCreate extends Component
      */
     public function render()
     {
-        $user = Auth::user();
-
-        abort_unless($user, 401);
-        abort_if($user->isSuperAdmin(), 403);
-        abort_unless($user->school_id, 403);
+        $schoolId = $this->getSchoolId();
 
         $parents = collect();
+
         $search = trim($this->parentSearch);
 
         if ($this->showParentResults && $search !== '') {
+
             $parents = SchoolParent::query()
-                ->where('school_id', $user->school_id)
+                ->where('school_id', $schoolId)
                 ->where(function ($query) use ($search) {
+
                     $query->where(
                         'first_name',
                         'like',
@@ -311,11 +400,18 @@ class StudentCreate extends Component
                 ]);
         }
 
+        /*
+        |--------------------------------------------------------------------------
+        | Selected Parent
+        |--------------------------------------------------------------------------
+        */
+
         $selectedParent = null;
 
         if ($this->parentId !== '') {
+
             $selectedParent = SchoolParent::query()
-                ->where('school_id', $user->school_id)
+                ->where('school_id', $schoolId)
                 ->find($this->parentId);
         }
 
